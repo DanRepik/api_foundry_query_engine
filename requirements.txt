@@ -1,0 +1,10 @@
+build
+twine
+pytest
+psycopg2-binary
+
+pytest
+requests
+
+-e ../api_foundry
+-e .

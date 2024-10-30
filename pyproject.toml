@@ -1,0 +1,37 @@
+[build-system]
+requires = ["hatchling>=1.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "api-foundry-auery-engine"
+version = "0.0.1"
+authors = [
+    { name="Daniel Repik", email="danrepik@icloud.com" },
+]
+description = "The AWS lambda service handler use by the `api_foundry` project is a powerful tool designed to automate the deployment of REST APIs on AWS using Lambda services to access and interact with relational databases (RDBMS). This project leverages the OpenAPI specification to define and manage the APIs"
+requires-python = ">=3.9"
+classifiers = [
+    "Programming Language :: Python :: 3.9",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "pyhumps",
+    "cryptography",
+    "requests",
+    "simplejson",
+    "pyyaml",
+    "boto3",
+]
+
+[project.urls]
+"Documentation" = "https://github.com/DanRepik/api-foundry"
+"Source" = "https://github.com/DanRepik/api-foundry"
+
+[tool.hatch.build.targets.sdist]
+include = ["api_foundry_query_engine"]
+
+[tool.hatch.build.targets.wheel]
+include = ["api_foundry_query_engine"]
+
+[project.scripts]
+

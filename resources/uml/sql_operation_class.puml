@@ -1,0 +1,67 @@
+@startuml
+
+class SQLOperation {
+    -operation: Operation
+    -engine: str
+    -__select_list_columns: Optional[List[str]]
+    +__init__(operation: Operation, engine: str)
+    +sql: str
+    +placeholders: Dict[str, SchemaObjectProperty]
+    +select_list_columns: List[str]
+    +marshal_record(record: dict): dict
+    +placeholder(property: SchemaObjectProperty, param: str = ""): str
+    +generate_sql_condition(property: SchemaObjectProperty, value, prefix: Optional[str] = None): str
+    +generate_placeholders(property: SchemaObjectProperty, value, prefix: Optional[str] = None): dict
+    +search_value_assignment(property: SchemaObjectProperty, value, prefix: Optional[str] = None): tuple[str, dict]
+    +selection_results: Dict
+    #selection_result_map(): Dict
+}
+
+class SQLGenerator {
+    -schema_object: SchemaObject
+    -single_table: bool
+    -__select_list: Optional[str]
+    -__selection_result_map: Optional[Dict]
+    -search_placeholders: dict
+    -store_placeholders: dict
+    -active_prefixes: set
+    +__init__(operation: Operation, schema_object: SchemaObject, engine: str)
+    +sql: str
+    +placeholders: dict
+    +prefix_map: Dict[str, str]
+    +select_list: str
+    +table_expression: str
+    +search_condition: str
+    +selection_result_map(): Dict
+    +filter_and_prefix_keys(regex_list: List[str], properties: dict, prefix: Optional[str] = None): dict
+    +concurrency_generator(property: SchemaObjectProperty): str
+}
+
+class CustomSQLGenerator {
+    -path_operation: PathOperation
+    -_placeholders: Optional[Dict[str, SchemaObjectProperty]]
+    -_sql: str
+    +__init__(operation: Operation, path_operation: PathOperation, engine: str)
+    +sql: str
+    +placeholders: Dict[str, SchemaObjectProperty]
+    +select_list_columns: List[SchemaObjectProperty]
+    +_compile()
+    +_get_placeholder_text(match): str
+}
+
+class OperationDAO {
+    -operation: Operation
+    -schema_object: SchemaObject
+    -sql_operation: SQLOperation
+    +__init__(operation: Operation, engine: str)
+    +execute(cursor: Cursor): list[dict] | dict
+    -__sql_operation(engine: str): SQLOperation
+    -__fetch_many(parent_set: list[dict], cursor: Cursor)
+    -__fetch_record_set(generator: SQLOperation, cursor: Cursor): list[dict]
+}
+
+SQLOperation <|-- SQLGenerator
+SQLOperation <|-- CustomSQLGenerator
+OperationDAO *-- SQLOperation
+
+@enduml

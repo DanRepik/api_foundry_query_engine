@@ -1,0 +1,11 @@
+.DS_STORE
+*.pyc
+dist/
+__pycache__/
+venv
+build/
+coverage.xml
+htmlcov/
+.coverage.*
+.coverage
+.vscode/

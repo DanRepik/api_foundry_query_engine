@@ -1,0 +1,42 @@
+@startuml
+
+actor User
+participant OperationDAO
+participant Cursor
+participant SQLOperation
+
+User -> OperationDAO: execute(cursor: Cursor)
+activate OperationDAO
+OperationDAO -> OperationDAO: __fetch_record_set(self.sql_operation, cursor)
+activate OperationDAO
+
+OperationDAO -> Cursor: execute(sql, self.sql_operation.placeholders, self.sql_operation.selection_results)
+activate Cursor
+Cursor -> Cursor: (execute the SQL query)
+Cursor -> OperationDAO: record_set
+deactivate Cursor
+
+OperationDAO -> SQLOperation: marshal_record(record)
+activate SQLOperation
+SQLOperation -> OperationDAO: object
+deactivate SQLOperation
+
+OperationDAO -> OperationDAO: append object to result
+
+OperationDAO -> OperationDAO: return result
+deactivate OperationDAO
+
+alt operation.action == "read" and operation.metadata_params.get("count", False)
+    OperationDAO -> User: result[0]
+else operation.action == "read"
+    OperationDAO -> OperationDAO: __fetch_many(result, cursor)
+    activate OperationDAO
+    OperationDAO -> OperationDAO: return
+    deactivate OperationDAO
+else operation.action in ["update", "delete"] and len(result) == 0
+    OperationDAO -> User: ApplicationException
+else
+    OperationDAO -> User: result
+end
+
+@enduml
