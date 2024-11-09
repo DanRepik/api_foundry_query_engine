@@ -1,53 +1,8 @@
 path_operations:
-    /top_selling_albums:get:
+    top_selling_albums_read:
+        action: read
         database: chinook
-        inputs:
-            end:
-                api_name: end
-                api_type: string
-                column_name: end
-                column_type: string
-                required: true
-                type: string
-            start:
-                api_name: start
-                api_type: string
-                column_name: start
-                column_type: string
-                required: true
-                type: string
-        method: get
-        outputs:
-            album_id:
-                api_name: album_id
-                api_type: integer
-                column_name: album_id
-                column_type: integer
-                required: false
-                type: integer
-            album_title:
-                api_name: album_title
-                api_type: string
-                column_name: album_title
-                column_type: string
-                required: false
-                type: string
-            total_sold:
-                api_name: total_sold
-                api_type: integer
-                column_name: total_sold
-                column_type: integer
-                required: false
-                type: integer
-        path: /top_selling_albums
-        sql: "SELECT\n    a.album_id as album_id,\n    a.title AS album_title,\n \
-            \   COUNT(il.invoice_line_id) AS total_sold\nFROM\n    invoice_line il\n\
-            JOIN invoice i ON\n    il.invoice_id = i.invoice_id\nJOIN\n    track t\
-            \ ON il.track_id = t.track_id\nJOIN\n    album a ON t.album_id = a.album_id\n\
-            WHERE\n    i.invoice_date >= :start\n    AND i.invoice_date <= :end\n\
-            GROUP BY\n    a.album_id\nORDER BY\n    total_sold DESC\nLIMIT 10;\n"
-    /top_selling_albums_rename:get:
-        database: chinook
+        entity: top_selling_albums
         inputs:
             end:
                 api_name: end
@@ -71,7 +26,61 @@ path_operations:
                 column_type: string
                 required: true
                 type: string
-        method: get
+        outputs:
+            album_id:
+                api_name: album_id
+                api_type: integer
+                column_name: album_id
+                column_type: integer
+                required: false
+                type: integer
+            album_title:
+                api_name: album_title
+                api_type: string
+                column_name: album_title
+                column_type: string
+                required: false
+                type: string
+            total_sold:
+                api_name: total_sold
+                api_type: integer
+                column_name: total_sold
+                column_type: integer
+                required: false
+                type: integer
+        sql: "SELECT\n    a.album_id as album_id,\n    a.title AS album_title,\n \
+            \   COUNT(il.invoice_line_id) AS total_sold\nFROM\n    invoice_line il\n\
+            JOIN invoice i ON\n    il.invoice_id = i.invoice_id\nJOIN\n    track t\
+            \ ON il.track_id = t.track_id\nJOIN\n    album a ON t.album_id = a.album_id\n\
+            WHERE\n    i.invoice_date >= :start\n    AND i.invoice_date <= :end\n\
+            GROUP BY\n    a.album_id\nORDER BY\n    total_sold DESC\nLIMIT :limit\n"
+    top_selling_albums_rename_read:
+        action: read
+        database: chinook
+        entity: top_selling_albums_rename
+        inputs:
+            end:
+                api_name: end
+                api_type: string
+                column_name: end
+                column_type: string
+                required: true
+                type: string
+            limit:
+                api_name: limit
+                api_type: string
+                column_name: limit
+                column_type: string
+                default: 10
+                required: false
+                type: string
+            start:
+                api_name: start
+                api_type: string
+                column_name: start
+                column_type: string
+                required: true
+                type: string
         outputs:
             album_id:
                 api_name: album_id
@@ -94,7 +103,6 @@ path_operations:
                 column_type: integer
                 required: false
                 type: integer
-        path: /top_selling_albums_rename
         sql: "SELECT\n    a.album_id,\n    a.title,\n    COUNT(il.invoice_line_id)\n\
             FROM\n    invoice_line il\nJOIN invoice i ON\n    il.invoice_id = i.invoice_id\n\
             JOIN\n    track t ON il.track_id = t.track_id\nJOIN\n    album a ON t.album_id\

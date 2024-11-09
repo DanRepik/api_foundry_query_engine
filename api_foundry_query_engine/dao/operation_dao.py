@@ -38,7 +38,7 @@ class OperationDAO(DAO):
     def query_handler(self) -> SQLQueryHandler:
         if not hasattr(self, "_query_handler"):
             path_operation = get_path_operation(
-                self.operation.path, self.operation.action
+                self.operation.entity, self.operation.action
             )
             if path_operation:
                 self._query_handler = SQLCustomQueryHandler(
@@ -46,7 +46,7 @@ class OperationDAO(DAO):
                 )
                 return self._query_handler
 
-            schema_object = get_schema_object(self.operation.path)
+            schema_object = get_schema_object(self.operation.entity)
             if self.operation.action == "read":
                 self._query_handler = SQLSelectSchemaQueryHandler(
                     self.operation, schema_object, self.engine
@@ -96,7 +96,7 @@ class OperationDAO(DAO):
         if "properties" not in self.operation.metadata_params:
             return
 
-        schema_object = get_schema_object(self.operation.path)
+        schema_object = get_schema_object(self.operation.entity)
         for name, relation in schema_object.relations.items():
             if relation.type == "object":
                 continue

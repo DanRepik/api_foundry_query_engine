@@ -6,7 +6,7 @@ from api_foundry_query_engine.operation import Operation
 class MockService(Service):
     def execute(self, operation):
         # Simulating service execution and returning dummy result
-        assert operation.path == "entity"
+        assert operation.entity == "entity"
         assert operation.action == "action"
         assert operation.query_params == {"query": "query"}
         return [{"key": "value"}]
@@ -19,7 +19,7 @@ class MockAdapter(Adapter):
 
     def unmarshal(self, event):
         return Operation(
-            path="entity",
+            entity="entity",
             action="action",
             store_params={"store": "store"},
             query_params={"query": "query"},

@@ -3,8 +3,8 @@ requires = ["hatchling>=1.0"]
 build-backend = "hatchling.build"
 
 [project]
-name = "api-foundry-auery-engine"
-version = "0.0.1"
+name = "api-foundry-query-engine"
+version = "0.0.3"
 authors = [
     { name="Daniel Repik", email="danrepik@icloud.com" },
 ]
@@ -15,12 +15,9 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
-    "pyhumps",
-    "cryptography",
-    "requests",
-    "simplejson",
-    "pyyaml",
     "boto3",
+    "pyyaml",
+    "pyhumps",
 ]
 
 [project.urls]

@@ -4,7 +4,7 @@ from api_foundry_query_engine.utils.logger import logger
 from api_foundry_query_engine.operation import Operation
 from api_foundry_query_engine.services.transactional_service import TransactionalService
 
-from test_fixtures import load_model, db_secrets  # noqa F401
+from tests.test_fixtures import load_model, db_secrets  # noqa F401
 
 log = logger(__name__)
 
@@ -14,7 +14,7 @@ class TestCustomOperations:
     def test_top_albums(self, load_model, db_secrets):  # noqa F811
         result = TransactionalService().execute(
             Operation(
-                path="top_selling_albums",
+                entity="top_selling_albums",
                 action="read",
                 query_params={
                     "start": "2021-03-01T00:00:00",
@@ -46,7 +46,7 @@ class TestCustomOperations:
     def test_top_albums_rename(self, load_model, db_secrets):  # noqa F811
         result = TransactionalService().execute(
             Operation(
-                path="top_selling_albums_rename",
+                entity="top_selling_albums_rename",
                 action="read",
                 query_params={
                     "start": "2021-03-01T00:00:00",

@@ -34,7 +34,7 @@ log = logger(__name__)
 class TestSQLHandler:
     def test_field_selection(self):
         sql_handler = SQLSelectSchemaQueryHandler(
-            Operation(path="invoice", action="read"),
+            Operation(entity="invoice", action="read"),
             invoice_with_datetime_version_stamp(),
             "postgres",
         )
@@ -48,7 +48,7 @@ class TestSQLHandler:
         load_api(os.path.join(os.getcwd(), "resources/api_spec.yaml"))
         sql_handler = SQLSelectSchemaQueryHandler(
             Operation(
-                path="invoice",
+                entity="invoice",
                 action="read",
                 metadata_params={"properties": ".* customer:.*"},
             ),
@@ -68,7 +68,7 @@ class TestSQLHandler:
     def test_search_condition(self):
         sql_handler = SQLSelectSchemaQueryHandler(
             Operation(
-                path="invoice",
+                entity="invoice",
                 action="read",
                 query_params={"invoice_id": "24", "total": "gt::5"},
             ),
@@ -91,7 +91,7 @@ class TestSQLHandler:
         try:
             operation_dao = OperationDAO(
                 Operation(
-                    path="invoice",
+                    entity="invoice",
                     action="read",
                     query_params={"invoice_id": "24", "line_items.track_id": "gt::5"},
                     metadata_params={"_properties": ".* customer:.*"},
@@ -115,7 +115,7 @@ class TestSQLHandler:
         try:
             operation_dao = OperationDAO(
                 Operation(
-                    path="invoice",
+                    entity="invoice",
                     action="read",
                     query_params={"invoice_id": "24", "track_id": "gt::5"},
                 ),
@@ -138,7 +138,7 @@ class TestSQLHandler:
         try:
             operation_dao = OperationDAO(
                 Operation(
-                    path="invoice",
+                    entity="invoice",
                     action="read",
                     query_params={
                         "invoice_id": "gt::24",
@@ -176,7 +176,7 @@ class TestSQLHandler:
         schema_object = get_schema_object("invoice")
         sql_handler = SQLSelectSchemaQueryHandler(
             Operation(
-                path="invoice",
+                entity="invoice",
                 action="read",
                 query_params={"invoice_id": 24, "line_items.price": "gt::5"},
             ),
@@ -230,7 +230,7 @@ class TestSQLHandler:
         invoice_date_property = schema_object.properties["invoice_date"]
         sql_handler = SQLSelectSchemaQueryHandler(
             Operation(
-                path="invoice",
+                entity="invoice",
                 action="read",
                 query_params={"invoice_id": 24, "line_items.price": "gt::5"},
             ),
@@ -255,7 +255,7 @@ class TestSQLHandler:
         schema_object = get_schema_object("invoice")
         sql_handler = SQLSelectSchemaQueryHandler(
             Operation(
-                path="invoice",
+                entity="invoice",
                 action="read",
                 query_params={"last_updated": date},
             ),
@@ -282,7 +282,7 @@ class TestSQLHandler:
 
         sql_handler = SQLSelectSchemaQueryHandler(
             Operation(
-                path="invoice",
+                entity="invoice",
                 action="read",
                 query_params={"last-updated": date},
             ),
@@ -302,7 +302,7 @@ class TestSQLHandler:
     def test_search_value_assignment_bool_to_int(self):
         sql_handler = SQLSelectSchemaQueryHandler(
             Operation(
-                path="invoice",
+                entity="invoice",
                 action="read",
                 query_params={"invoice_id": 24, "line_items.price": "gt::5"},
             ),
@@ -327,7 +327,7 @@ class TestSQLHandler:
         try:
             sql_handler = SQLSelectSchemaQueryHandler(
                 Operation(
-                    path="invoice", action="read", query_params={"not_a_property": "FL"}
+                    entity="invoice", action="read", query_params={"not_a_property": "FL"}
                 ),
                 invoice_with_datetime_version_stamp(),
                 "postgres",
@@ -341,7 +341,7 @@ class TestSQLHandler:
         load_api(os.path.join(os.getcwd(), "resources/api_spec.yaml"))
         sql_handler = SQLSelectSchemaQueryHandler(
             Operation(
-                path="invoice",
+                entity="invoice",
                 action="read",
                 query_params={"billing_state": "FL"},
                 metadata_params={"properties": ".* customer:.* invoice_line_items:.*"},
@@ -365,7 +365,7 @@ class TestSQLHandler:
         load_api(os.path.join(os.getcwd(), "resources/api_spec.yaml"))
         sql_handler = SQLSelectSchemaQueryHandler(
             Operation(
-                path="invoice",
+                entity="invoice",
                 action="read",
                 query_params={"billing_state": "FL"},
                 metadata_params={"properties": ".* customer:.* invoice_line_items:.*"},
@@ -387,7 +387,7 @@ class TestSQLHandler:
     def test_select_simple_table(self):
         try:
             sql_handler = SQLSelectSchemaQueryHandler(
-                Operation(path="genre", action="read", query_params={"name": "Bill"}),
+                Operation(entity="genre", action="read", query_params={"name": "Bill"}),
                 genre_schema_with_timestamp(),
                 "postgres",
             )
@@ -407,7 +407,7 @@ class TestSQLHandler:
         try:
             sql_handler = SQLSelectSchemaQueryHandler(
                 Operation(
-                    path="genre",
+                    entity="genre",
                     action="read",
                     query_params={"genre_id": "gt::10"},
                     metadata_params={"count": True},
@@ -430,7 +430,7 @@ class TestSQLHandler:
     def test_select_single_table_no_conditions(self):
         try:
             sql_handler = SQLSelectSchemaQueryHandler(
-                Operation(path="genre", action="read"),
+                Operation(entity="genre", action="read"),
                 genre_schema_with_timestamp(),
                 "postgres",
             )
@@ -448,7 +448,7 @@ class TestSQLHandler:
         load_api(os.path.join(os.getcwd(), "resources/api_spec.yaml"))
         sql_handler = SQLDeleteSchemaQueryHandler(
             Operation(
-                path="playlist_track",
+                entity="playlist_track",
                 action="delete",
                 query_params={
                     "playlist_id": "2",
@@ -470,7 +470,7 @@ class TestSQLHandler:
     def test_relation_search_condition(self):
         load_api(os.path.join(os.getcwd(), "resources/api_spec.yaml"))
         operation = Operation(
-            path="invoice",
+            entity="invoice",
             action="read",
             query_params={"billing_state": "FL"},
             metadata_params={"properties": ".* customer:.* invoice_line_items:.*"},

@@ -1,3 +1,6 @@
+
+import yaml
+
 from datetime import datetime
 from typing import Any, Dict, Optional
 
@@ -122,9 +125,10 @@ class PathOperation:
     """Represents a path operation in the API configuration."""
 
     def __init__(self, data: Dict[str, Any]):
-        self.path = data.get("path")
-        self.method = data.get("method")
-        self.sql = data.get("sql")
+        self.entity = data["entity"]
+        self.action = data["action"]
+        self.sql = data["sql"]
+        self.database = data["database"]
         self.inputs = {
             name: SchemaObjectProperty(input_data)
             for name, input_data in data.get("inputs", {}).items()
@@ -135,7 +139,7 @@ class PathOperation:
         }
 
     def __repr__(self):
-        return f"PathOperation(path={self.path}, method={self.method})"
+        return f"PathOperation(entity={self.entity}, method={self.method})"
 
 
 schema_objects = None
@@ -150,7 +154,7 @@ def get_path_operation(path: str, method:str) -> Optional[PathOperation]:
     """Returns a path operation by name."""
     log.info(f"path: {path}, method: {method}")
     global path_operations
-    return path_operations.get(f"{path}:{method}")
+    return path_operations.get(f"{path}_{method}")
 
 
 class APIModel:
@@ -171,4 +175,9 @@ class APIModel:
 
     def __repr__(self):
         return f"APIModel(schema_objects={list(self.schema_objects.keys())}, path_operations={list(self.path_operations.keys())})"
+
+
+def load_api(filename: str):
+    with open(filename, "r") as file:
+        APIModel(yaml.safe_load(file))
 

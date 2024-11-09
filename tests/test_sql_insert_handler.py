@@ -26,7 +26,7 @@ class TestInsertSQLHandler:
     def test_insert_uuid(self):
         sql_handler = SQLInsertSchemaQueryHandler(
             Operation(
-                path="invoice",
+                entity="invoice",
                 action="create",
                 store_params={
                     "customer_id": "2",
@@ -69,7 +69,7 @@ class TestInsertSQLHandler:
     def test_insert_no_cc(self):  # noqa F811
         sql_handler = SQLInsertSchemaQueryHandler(
             Operation(
-                path="invoice",
+                entity="invoice",
                 action="create",
                 store_params={
                     "customer_id": "2",
@@ -112,7 +112,7 @@ class TestInsertSQLHandler:
     def test_insert_property_selection(self):
         sql_handler = SQLInsertSchemaQueryHandler(
             Operation(
-                path="invoice",
+                entity="invoice",
                 action="create",
                 store_params={
                     "customer_id": "2",
@@ -154,7 +154,7 @@ class TestInsertSQLHandler:
         try:
             SQLInsertSchemaQueryHandler(
                 Operation(
-                    path="genre",
+                    entity="genre",
                     action="create",
                     store_params={"genre_id": 34, "description": "Bad genre"},
                 ),
@@ -172,7 +172,7 @@ class TestInsertSQLHandler:
         try:
             SQLInsertSchemaQueryHandler(
                 Operation(
-                    path="genre",
+                    entity="genre",
                     action="create",
                     store_params={"description": "Bad genre"},
                 ),
@@ -187,7 +187,7 @@ class TestInsertSQLHandler:
         try:
             SQLInsertSchemaQueryHandler(
                 Operation(
-                    path="genre",
+                    entity="genre",
                     action="create",
                     store_params={"genre_id": 34, "name": "Good genre"},
                 ),
@@ -201,7 +201,7 @@ class TestInsertSQLHandler:
     def test_insert_sequence(self):
         sql_handler = SQLInsertSchemaQueryHandler(
             Operation(
-                path="genre",
+                entity="genre",
                 action="create",
                 store_params={"name": "Good genre"},
             ),
@@ -222,7 +222,7 @@ class TestInsertSQLHandler:
         try:
             sql_handler = SQLInsertSchemaQueryHandler(
                 Operation(
-                    path="genre",
+                    entity="genre",
                     action="create",
                     store_params={"name": "New genre"},
                 ),
@@ -249,7 +249,7 @@ class TestInsertSQLHandler:
         try:
             SQLInsertSchemaQueryHandler(
                 Operation(
-                    path="genre",
+                    entity="genre",
                     action="create",
                     store_params={
                         "name": "New genre",
@@ -271,7 +271,7 @@ class TestInsertSQLHandler:
         try:
             sql_handler = SQLInsertSchemaQueryHandler(
                 Operation(
-                    path="genre",
+                    entity="genre",
                     action="create",
                     store_params={"name": "New genre"},
                 ),

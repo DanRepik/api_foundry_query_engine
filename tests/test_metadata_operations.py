@@ -15,7 +15,7 @@ class TestMetadataOperations:
     def test_count(self, load_model, db_secrets):  # noqa F811
         result = TransactionalService().execute(
             Operation(
-                path="media_type",
+                entity="media_type",
                 action="read",
                 metadata_params={"count": True},
             )
@@ -27,7 +27,7 @@ class TestMetadataOperations:
     def test_order(self, load_model, db_secrets):  # noqa F811
         result = TransactionalService().execute(
             Operation(
-                path="customer",
+                entity="customer",
                 action="read",
                 metadata_params={"sort": "phone"},
             )
@@ -41,7 +41,7 @@ class TestMetadataOperations:
         try:
             TransactionalService().execute(
                 Operation(
-                    path="customer",
+                    entity="customer",
                     action="read",
                     metadata_params={"sort": "x-phone"},
                 )
@@ -58,7 +58,7 @@ class TestMetadataOperations:
         try:
             TransactionalService().execute(
                 Operation(
-                    path="invoice",
+                    entity="invoice",
                     action="read",
                     metadata_params={"sort": "customerx.phone"},
                 )
@@ -75,7 +75,7 @@ class TestMetadataOperations:
         try:
             TransactionalService().execute(
                 Operation(
-                    path="invoice",
+                    entity="invoice",
                     action="read",
                     metadata_params={"sort": "customer.phonex"},
                 )
@@ -91,7 +91,7 @@ class TestMetadataOperations:
     def test_order_asc(self, load_model, db_secrets):  # noqa F811
         result = TransactionalService().execute(
             Operation(
-                path="customer",
+                entity="customer",
                 action="read",
                 metadata_params={"sort": "phone:asc"},
             )
@@ -104,7 +104,7 @@ class TestMetadataOperations:
     def test_order_desc(self, load_model, db_secrets):  # noqa F811
         result = TransactionalService().execute(
             Operation(
-                path="customer",
+                entity="customer",
                 action="read",
                 metadata_params={"sort": "last_name:desc"},
             )
@@ -117,7 +117,7 @@ class TestMetadataOperations:
     def test_order_using_object(self, load_model, db_secrets):  # noqa F811
         result = TransactionalService().execute(
             Operation(
-                path="invoice",
+                entity="invoice",
                 action="read",
                 metadata_params={"sort": "customer.phone,invoice_date"},
             )
@@ -130,7 +130,7 @@ class TestMetadataOperations:
     def test_limit(self, load_model, db_secrets):  # noqa F811
         result = TransactionalService().execute(
             Operation(
-                path="invoice", action="read", metadata_params={"limit": 50}
+                entity="invoice", action="read", metadata_params={"limit": 50}
             )
         )
         log.debug(f"result: {len(result)}")
@@ -140,7 +140,7 @@ class TestMetadataOperations:
         try:
             TransactionalService().execute(
                 Operation(
-                    path="invoice",
+                    entity="invoice",
                     action="read",
                     metadata_params={"limit": "50x"},
                 )
@@ -153,7 +153,7 @@ class TestMetadataOperations:
     def test_offset(self, load_model, db_secrets):  # noqa F811
         result = TransactionalService().execute(
             Operation(
-                path="invoice",
+                entity="invoice",
                 action="read",
                 metadata_params={"sort": "invoice_id:asc", "limit": 1, "offset": 50},
             )
@@ -166,7 +166,7 @@ class TestMetadataOperations:
         try:
             TransactionalService().execute(
                 Operation(
-                    path="invoice",
+                    entity="invoice",
                     action="read",
                     metadata_params={"offset": "50x"},
                 )

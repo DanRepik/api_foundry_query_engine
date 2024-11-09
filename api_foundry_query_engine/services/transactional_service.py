@@ -13,15 +13,15 @@ log = logger(__name__)
 
 class TransactionalService(ServiceAdapter):
     def execute(self, operation: Operation):
-        path_operation = get_path_operation(operation.path, operation.action)
+        path_operation = get_path_operation(operation.entity, operation.action)
         if path_operation:
             database = path_operation.database
         else:
-            schema_object = get_schema_object(operation.path)
+            schema_object = get_schema_object(operation.entity)
             if schema_object:
                 database = schema_object.database
             else:
-                raise ApplicationException(500, f"Unknown operation: {operation.path}")
+                raise ApplicationException(500, f"Unknown operation: {operation.entity}")
 
         connection = connection_factory.get_connection(database)
 

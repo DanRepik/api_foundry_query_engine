@@ -5,7 +5,7 @@ from api_foundry_query_engine.utils.api_model import (
     SchemaObject,
     SchemaObjectProperty
 )
-from api_foundry.utils.logger import logger
+from api_foundry_query_engine.utils.logger import logger
 
 log = logger(__name__)
 

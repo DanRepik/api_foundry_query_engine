@@ -24,7 +24,7 @@ class TestUpdateSQLHandler:
     def test_update_uuid(self):
         sql_handler = SQLUpdateSchemaQueryHandler(
             Operation(
-                path="invoice",
+                entity="invoice",
                 action="update",
                 query_params={
                     "customer_id": "2",
@@ -56,7 +56,7 @@ class TestUpdateSQLHandler:
         try:
             SQLUpdateSchemaQueryHandler(
                 Operation(
-                    path="invoice",
+                    entity="invoice",
                     action="update",
                     query_params={
                         "customer_id": "in::2,3,4",
@@ -78,7 +78,7 @@ class TestUpdateSQLHandler:
     def test_update_bulk(self):
         sql_handler = SQLUpdateSchemaQueryHandler(
             Operation(
-                path="invoice",
+                entity="invoice",
                 action="update",
                 query_params={"customer_id": "in::3,4,5"},
                 store_params={"invoice_date": "2024-03-18", "total": "2.63"},
@@ -107,7 +107,7 @@ class TestUpdateSQLHandler:
     def test_update_timestamp(self):
         sql_handler = SQLUpdateSchemaQueryHandler(
             Operation(
-                path="invoice",
+                entity="invoice",
                 action="update",
                 query_params={
                     "customer_id": "2",
@@ -137,7 +137,7 @@ class TestUpdateSQLHandler:
 
     def test_update_missing_version(self):
         operation = Operation(
-            path="invoice",
+            entity="invoice",
             action="update",
             query_params={
                 "customer_id": "2",
@@ -164,7 +164,7 @@ class TestUpdateSQLHandler:
         try:
             sql_handler = SQLUpdateSchemaQueryHandler(
                 Operation(
-                    path="invoice",
+                    entity="invoice",
                     action="update",
                     query_params={
                         "customer_id": "2",

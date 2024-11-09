@@ -57,7 +57,7 @@ class GatewayAdapter(Adapter):
             store_params = json.loads(body)
 
         return Operation(
-            path=entity,
+            entity=entity,
             action=action,
             store_params=store_params,
             query_params=query_params,

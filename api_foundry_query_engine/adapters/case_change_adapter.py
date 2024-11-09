@@ -34,7 +34,7 @@ class CaseChangeAdapter(Adapter):
 
         if self.camel_case:
             return Operation(
-                path=operation.path,
+                path=operation.entity,
                 action=operation.action,
                 store_params=decamelize(operation.store_params),
                 query_params=decamelize(operation.query_params),
