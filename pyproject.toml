@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "api-foundry-query-engine"
-version = "0.0.3"
+version = "0.0.4"
 authors = [
     { name="Daniel Repik", email="danrepik@icloud.com" },
 ]
@@ -31,4 +31,10 @@ include = ["api_foundry_query_engine"]
 include = ["api_foundry_query_engine"]
 
 [project.scripts]
+
+[tool.pytest.ini_options]
+markers = [
+    "unit: marks tests as unit tests that do not require a database",
+    "integration: marks tests that operate on a real database",
+]
 

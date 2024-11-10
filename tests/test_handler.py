@@ -1,16 +1,20 @@
+
 import os
 import json
-import pytest
 
 from api_foundry_query_engine.utils.api_model import APIModel
-from api_foundry_query_engine.handler import lambda_handler
+from api_foundry_query_engine.utils.logger import logger
 
-from test_fixtures import db_secrets  # noqa F401
+from tests.test_fixtures import db_secrets  # noqa F401
 
+log = logger(__name__)
 
-@pytest.fixture(autouse=True)
-def set_environment_variables(db_secrets):  # noqa F811
-    os.environ["API_SPEC"] = os.path(os.getcwd(), "resources/api_spec.yaml")
+def test_handler(db_secrets):  # noqa F811
+    log.info(f"cwd {os.path.join(os.getcwd(), 'resources/api_spec.yaml')}")
+
+    os.environ["API_SPEC"] = os.path.join(os.getcwd(), "resources/api_spec.yaml")
+    
+    from api_foundry_query_engine.lambda_handler import handler
 
     event = {
         "path": "/album",
@@ -54,6 +58,7 @@ def set_environment_variables(db_secrets):  # noqa F811
 
     print(f"current dir: {os.getcwd()}")
 #    ModelFactory.load_yaml(api_spec_path="resources/chinook_api.yaml")
-    response = lambda_handler(event, None)
+    response = handler(event, None)
     assert response["statusCode"] == 200
-    assert json.loads(response["body"]) == {"message": "success"}
+    albums = json.loads(response["body"])
+    assert len(albums) == 348
