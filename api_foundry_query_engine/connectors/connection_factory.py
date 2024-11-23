@@ -99,7 +99,6 @@ class ConnectionFactory:
 
         # Get the secret value from AWS Secrets Manager
         log.info(f"db_secret_name: {db_secret_name}")
-        db_secret = secretsmanager.describe_secret(SecretId=db_secret_name)
         db_secret = secretsmanager.get_secret_value(SecretId=db_secret_name)
         log.debug(f"loading secret name: {db_secret}")
 
