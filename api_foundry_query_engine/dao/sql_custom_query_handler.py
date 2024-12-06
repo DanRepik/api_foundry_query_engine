@@ -34,8 +34,10 @@ class SQLCustomQueryHandler(SQLQueryHandler):
         raise NotImplementedError()
 
     def selection_result_map(self) -> Dict:
-        log.info(f"outputs: {self.path_operation.outputs}")
-        return self.path_operation.outputs
+        log.info("selection_result_map")
+        allowed_properties = self.check_permissions("read", self.path_operation.permissions, self.path_operation.outputs)
+        log.info(f"allowed_properties: {allowed_properties}")
+        return allowed_properties
 
     def _compile(self):
         placeholder_pattern = re.compile(r":(\w+)")

@@ -56,12 +56,20 @@ class GatewayAdapter(Adapter):
         if body is not None and len(body) > 0:
             store_params = json.loads(body)
 
+        roles = []
+        authorizer_info = event.get("requestContext", {}).get("authorizer", {})
+        claims = authorizer_info.get("claims", {})
+        roles = claims.get("roles", [])            
+        subject = claims.get("subject")            
+
         return Operation(
             entity=entity,
             action=action,
             store_params=store_params,
             query_params=query_params,
             metadata_params=metadata_params,
+            roles=roles,
+            subject=subject,
         )
 
     def _convert_parameters(self, parameters):

@@ -61,4 +61,4 @@ def test_handler(db_secrets):  # noqa F811
     response = handler(event, None)
     assert response["statusCode"] == 200
     albums = json.loads(response["body"])
-    assert len(albums) == 348
+    assert len(albums) == 350

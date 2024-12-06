@@ -131,6 +131,7 @@ class SQLSelectSchemaQueryHandler(SQLSchemaQueryHandler):
             }
             return self._selection_results
 
+        log.info("selection_result_map")
         filter_str = self.operation.metadata_params.get("properties", ".*")
         self._selection_results = {}
 
@@ -158,8 +159,11 @@ class SQLSelectSchemaQueryHandler(SQLSchemaQueryHandler):
                 )
             # Filter and prefix keys for the current entity
             # and regular expressions
+            log.info(f"schema_object: {vars(schema_object)}")
+            allowed_properties = self.check_permissions("read", schema_object.permissions, schema_object.properties)
+            log.info(f"allowed_properties: {allowed_properties}")
             filtered_keys = self.filter_and_prefix_keys(
-                reg_exs, schema_object.properties, self.prefix_map[relation]
+                reg_exs, allowed_properties, self.prefix_map[relation]
             )
 
             # Extend the result map with the filtered keys

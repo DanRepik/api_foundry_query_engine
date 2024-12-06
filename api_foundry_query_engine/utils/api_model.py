@@ -113,6 +113,7 @@ class SchemaObject:
             else None
         )
         self._primary_key = data.get("primary_key")
+        self.permissions = data.get("permissions")
 
     def __repr__(self):
         return f"SchemaObject(table_name={self.table_name}, primary_key={self.primary_key})"
@@ -137,6 +138,7 @@ class PathOperation:
             name: SchemaObjectProperty(output_data)
             for name, output_data in data.get("outputs", {}).items()
         }
+        self.permissions = data.get("security")
 
     def __repr__(self):
         return f"PathOperation(entity={self.entity}, method={self.method})"

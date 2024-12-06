@@ -3,7 +3,7 @@ import pytest
 from datetime import date, datetime, timezone
 import os
 
-from api_foundry_query_engine.utils.api_model import APIModel, get_schema_object
+from api_foundry_query_engine.utils.api_model import get_schema_object
 from api_foundry_query_engine.dao.operation_dao import OperationDAO
 from api_foundry_query_engine.dao.sql_delete_query_handler import (
     SQLDeleteSchemaQueryHandler,
