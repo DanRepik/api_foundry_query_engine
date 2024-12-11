@@ -39,21 +39,23 @@ class SQLUpdateSchemaQueryHandler(SQLSchemaQueryHandler):
 
     @property
     def update_values(self) -> str:
+        allowed_properties = self.check_permissions("write", self.schema_object.permissions, self.schema_object.properties)
         self.store_placeholders = {}
         columns = []
+        invalid_columns = []
 
         for name, value in self.operation.store_params.items():
-            try:
-                property = self.schema_object.properties[name]
-            except KeyError:
-                raise ApplicationException(
-                    400, f"Search condition column not found {name}"
-                )
+            if name not in allowed_properties:
+                invalid_columns.append(name)
+            else:
+                property = allowed_properties.get(name, None)
 
-            placeholder = property.api_name
-            column_name = property.column_name
+                placeholder = property.api_name
+                column_name = property.column_name
 
-            columns.append(f"{column_name} = {self.placeholder(property, placeholder)}")
-            self.store_placeholders[placeholder] = property.convert_to_db_value(value)
+                columns.append(f"{column_name} = {self.placeholder(property, placeholder)}")
+                self.store_placeholders[placeholder] = property.convert_to_db_value(value)
 
+        if invalid_columns:
+            raise ApplicationException(402, f"Subject does not have permission to update properties: {invalid_columns}")
         return f" SET {', '.join(columns)}"
