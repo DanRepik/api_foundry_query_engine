@@ -4,6 +4,7 @@ from typing import Optional
 
 from api_foundry_query_engine.utils.api_model import APIModel, SchemaObject
 
+
 def load_api(filename: Optional[str] = None):
     if not filename:
         filename = os.path.join(os.getcwd(), "resources/api_spec.yaml")
@@ -408,6 +409,7 @@ def genre_schema_with_timestamp():
         }
     )
 
+
 def genre_schema_with_serial_number():
     return SchemaObject(
         {
@@ -452,6 +454,7 @@ def genre_schema_with_serial_number():
             },
         }
     )
+
 
 def genre_schema_required_key():
     return SchemaObject(
@@ -535,4 +538,3 @@ def genre_schema_seqnence_key():
             },
         }
     )
-

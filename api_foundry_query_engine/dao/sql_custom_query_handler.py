@@ -35,9 +35,11 @@ class SQLCustomQueryHandler(SQLQueryHandler):
 
     @property
     def selection_results(self) -> Dict:
-        if not hasattr( self, "_selection_results"):
+        if not hasattr(self, "_selection_results"):
             log.info("selection_result_map")
-            self._selection_results = self.check_permissions("read", self.path_operation.permissions, self.path_operation.outputs)
+            self._selection_results = self.check_permissions(
+                "read", self.path_operation.permissions, self.path_operation.outputs
+            )
             log.info(f"selection_results: {self._selection_results}")
         return self._selection_results
 

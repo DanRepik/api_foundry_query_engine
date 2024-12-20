@@ -22,9 +22,7 @@ class TestQueryOperations:
 
     def test_select_one(self, load_model, db_secrets):  # noqa F811
         result = TransactionalService().execute(
-            Operation(
-                entity="invoice", action="read", query_params={"invoice_id": 2}
-            )
+            Operation(entity="invoice", action="read", query_params={"invoice_id": 2})
         )
         log.info(f"result: {json.dumps(result, indent=4)}")
         assert len(result) == 1

@@ -70,9 +70,7 @@ class TestAssociationOperations:
         assert invoice["customer_id"] == 5
         assert invoice["billing_city"] == "Prague"
 
-    def test_invalid_object_property_criteria_1(
-        self, db_secrets  # noqa F811
-    ):
+    def test_invalid_object_property_criteria_1(self, db_secrets):  # noqa F811
         load_api()
         try:
             TransactionalService().execute(
@@ -90,9 +88,7 @@ class TestAssociationOperations:
                 == "Invalid selection property invoice does not have a property custom"
             )
 
-    def test_invalid_object_property_criteria_2(
-        self, db_secrets  # noqa F811
-    ):
+    def test_invalid_object_property_criteria_2(self, db_secrets):  # noqa F811
         load_api()
         try:
             TransactionalService().execute(
@@ -169,9 +165,7 @@ class TestAssociationOperations:
                 == "Bad object association: invoice does not have a lint_items property"
             )
 
-    def test_invalid_array_property_criteria_1(
-        self, db_secrets  # noqa F811
-    ):
+    def test_invalid_array_property_criteria_1(self, db_secrets):  # noqa F811
         load_api()
         try:
             TransactionalService().execute(
@@ -189,9 +183,7 @@ class TestAssociationOperations:
                 == "Invalid selection property invoice does not have a property line_itms"  # noqa E501
             )
 
-    def test_invalid_array_property_criteria_2(
-        self, db_secrets  # noqa F811
-    ):
+    def test_invalid_array_property_criteria_2(self, db_secrets):  # noqa F811
         load_api()
         try:
             TransactionalService().execute(

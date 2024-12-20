@@ -192,7 +192,7 @@ schema_objects:
 
 def test_read_some_restrictions():
     # sales associates cannot read artist_id or year_released
-    model_factory = APIModel(safe_load(ALBUM_SCHEMA))
+    APIModel(safe_load(ALBUM_SCHEMA))
     schema_object = get_schema_object("album")
     log.info(f"schema_object: {schema_object}")
 
@@ -217,8 +217,7 @@ def test_read_some_restrictions():
 
 
 def test_read_no_restrictions():
-
-    model_factory = APIModel(safe_load(ALBUM_SCHEMA))
+    APIModel(safe_load(ALBUM_SCHEMA))
     schema_object = get_schema_object("album")
     log.info(f"schema_object: {schema_object}")
 
@@ -244,7 +243,7 @@ def test_read_no_restrictions():
 
 def test_read_all_restricted():
     # role does not allow any properties returned
-    model_factory = APIModel(safe_load(ALBUM_SCHEMA))
+    APIModel(safe_load(ALBUM_SCHEMA))
     schema_object = get_schema_object("album")
     log.info(f"schema_object: {schema_object}")
 
@@ -276,7 +275,7 @@ def test_read_all_restricted():
 
 def test_read_relation_some_restrictions():
     # test that permissions are applied to association objects
-    model_factory = APIModel(safe_load(INVOICE_SCHEMA))
+    APIModel(safe_load(INVOICE_SCHEMA))
     schema_object = get_schema_object("invoice")
     log.info(f"schema_object: {schema_object}")
 
@@ -297,13 +296,14 @@ def test_read_relation_some_restrictions():
     log.info(f"sql: {sql_handler.sql}")
     assert (
         sql_handler.sql
-        == "SELECT i.invoice_date, i.invoice_id, i.total, inv.track_id, inv.unit_price FROM invoice AS i INNER JOIN invoice_line AS inv ON i.invoice_id = inv.invoice_id WHERE i.invoice_id = %(i_invoice_id)s"
+        == "SELECT i.invoice_date, i.invoice_id, i.total, inv.track_id, inv.unit_price FROM invoice AS i "
+        + "INNER JOIN invoice_line AS inv ON i.invoice_id = inv.invoice_id WHERE i.invoice_id = %(i_invoice_id)s"
     )
 
 
 def test_create_prohibited_property():
     # sales associates cannot update title
-    model_factory = APIModel(safe_load(ALBUM_SCHEMA))
+    APIModel(safe_load(ALBUM_SCHEMA))
     schema_object = get_schema_object("album")
     log.info(f"schema_object: {schema_object}")
 
@@ -318,18 +318,15 @@ def test_create_prohibited_property():
     )
 
     try:
-        sql = operation_dao.query_handler.sql
+        operation_dao.query_handler.sql
         assert False, "Exception should have been raised"
     except ApplicationException as ae:
-        assert (
-            ae.message
-            == "Subject is not allowed to create with property: title"
-        )
+        assert ae.message == "Subject is not allowed to create with property: title"
 
 
 def test_create_allowed_property():
     # sales associates cannot update title
-    model_factory = APIModel(safe_load(ALBUM_SCHEMA))
+    APIModel(safe_load(ALBUM_SCHEMA))
     schema_object = get_schema_object("album")
     log.info(f"schema_object: {schema_object}")
 
@@ -353,7 +350,7 @@ def test_create_allowed_property():
 
 def test_update_prohibited_property():
     # sales associates cannot update title
-    model_factory = APIModel(safe_load(ALBUM_SCHEMA))
+    APIModel(safe_load(ALBUM_SCHEMA))
     schema_object = get_schema_object("album")
     log.info(f"schema_object: {schema_object}")
 
@@ -369,7 +366,7 @@ def test_update_prohibited_property():
     )
 
     try:
-        sql = operation_dao.query_handler.sql
+        operation_dao.query_handler.sql
         assert False, "Exception should have been raised"
     except ApplicationException as ae:
         assert (
@@ -380,7 +377,7 @@ def test_update_prohibited_property():
 
 def test_update_allowed_property():
     # sales associates cannot update title
-    model_factory = APIModel(safe_load(ALBUM_SCHEMA))
+    APIModel(safe_load(ALBUM_SCHEMA))
     schema_object = get_schema_object("album")
     log.info(f"schema_object: {schema_object}")
 
@@ -402,9 +399,10 @@ def test_update_allowed_property():
         == "UPDATE album SET year_released = %(year_released)s WHERE album_id = %(album_id)s RETURNING album_id, title"
     )
 
+
 def test_delete_prohibited():
     # sales associates cannot delete albums
-    model_factory = APIModel(safe_load(ALBUM_SCHEMA))
+    APIModel(safe_load(ALBUM_SCHEMA))
     schema_object = get_schema_object("album")
     log.info(f"schema_object: {schema_object}")
 
@@ -419,18 +417,15 @@ def test_delete_prohibited():
     )
 
     try:
-        sql = operation_dao.query_handler.sql
+        operation_dao.query_handler.sql
         assert False, "Exception should have been raised"
     except ApplicationException as ae:
-        assert (
-            ae.message
-            == "Subject is not allowed to delete album"
-        )
+        assert ae.message == "Subject is not allowed to delete album"
 
 
 def test_delete_allowed():
     # sales associates cannot update title
-    model_factory = APIModel(safe_load(ALBUM_SCHEMA))
+    APIModel(safe_load(ALBUM_SCHEMA))
     schema_object = get_schema_object("album")
     log.info(f"schema_object: {schema_object}")
 
@@ -450,4 +445,3 @@ def test_delete_allowed():
         sql
         == "DELETE FROM album WHERE album_id = %(album_id)s RETURNING album_id, artist_id, title, year_released"
     )
-

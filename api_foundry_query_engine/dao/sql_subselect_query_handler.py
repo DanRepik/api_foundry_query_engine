@@ -1,7 +1,9 @@
 from typing import Optional
 
 from api_foundry_query_engine.dao.sql_query_handler import SQLSchemaQueryHandler
-from api_foundry_query_engine.dao.sql_select_query_handler import SQLSelectSchemaQueryHandler
+from api_foundry_query_engine.dao.sql_select_query_handler import (
+    SQLSelectSchemaQueryHandler,
+)
 from api_foundry_query_engine.operation import Operation
 from api_foundry_query_engine.utils.api_model import SchemaObjectAssociation
 
@@ -19,8 +21,9 @@ class SQLSubselectSchemaQueryHandler(SQLSelectSchemaQueryHandler):
         self.relation = relation
         self.parent_generator = parent_generator
 
-    def selection_result_map(self) -> dict:
-        filter_str = self.operation.metadata_params.get("properties", "")
+    @property
+    def selection_results(self) -> dict:
+        filter_str = self.operation.metadata_params.get("properties", ".*")
         result = {self.relation.child_property: self.relation.child_property}
 
         for relation_name, reg_exs in self.get_regex_map(filter_str).items():

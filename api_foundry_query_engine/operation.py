@@ -2,9 +2,9 @@ class Operation:
     """
     Represents an action to be performed on an entity.
 
-    The `Operation` class encapsulates the details required to execute an operation 
-    on a given entity, including query parameters for selecting records, parameters 
-    for storing or updating values, metadata for operational instructions, and 
+    The `Operation` class encapsulates the details required to execute an operation
+    on a given entity, including query parameters for selecting records, parameters
+    for storing or updating values, metadata for operational instructions, and
     roles defining the contexts in which the operation can be performed.
 
     Attributes:
@@ -25,7 +25,7 @@ class Operation:
         store_params: dict = {},
         metadata_params: dict = {},
         roles: dict = {},
-        subject: str = None
+        subject: str = None,
     ):
         """
         Initializes the Operation instance.
@@ -40,19 +40,19 @@ class Operation:
         """
         # The target entity for the operation (e.g., "User", "Order").
         self.entity = entity
-        
+
         # The type of action to perform (e.g., "create", "read", "update", "delete").
         self.action = action
-        
+
         # Query parameters to filter or identify the affected records.
         self.query_params = query_params
-        
+
         # Parameters defining the values to be stored or updated for the operation.
         self.store_params = store_params
-        
+
         # Metadata for operational instructions like sorting, limiting, or offsetting results.
         self.metadata_params = metadata_params
-        
+
         # Roles defining the context in which the operation is allowed.
         self.roles = roles
 

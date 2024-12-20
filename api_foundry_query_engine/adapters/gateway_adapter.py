@@ -59,8 +59,8 @@ class GatewayAdapter(Adapter):
         roles = []
         authorizer_info = event.get("requestContext", {}).get("authorizer", {})
         claims = authorizer_info.get("claims", {})
-        roles = claims.get("roles", [])            
-        subject = claims.get("subject")            
+        roles = claims.get("roles", [])
+        subject = claims.get("subject")
 
         return Operation(
             entity=entity,

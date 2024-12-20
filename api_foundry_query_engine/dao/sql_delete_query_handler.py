@@ -12,7 +12,6 @@ class SQLDeleteSchemaQueryHandler(SQLSchemaQueryHandler):
         self, operation: Operation, schema_object: SchemaObject, engine: str
     ) -> None:
         super().__init__(operation, schema_object, engine)
-        
 
     def check_permission(self) -> bool:
         """
@@ -44,7 +43,9 @@ class SQLDeleteSchemaQueryHandler(SQLSchemaQueryHandler):
     @property
     def sql(self) -> str:
         if not self.check_permission():
-            raise ApplicationException(402, f"Subject is not allowed to delete {self.schema_object.api_name}")
+            raise ApplicationException(
+                402, f"Subject is not allowed to delete {self.schema_object.api_name}"
+            )
 
         concurrency_property = self.schema_object.concurrency_property
         if concurrency_property:

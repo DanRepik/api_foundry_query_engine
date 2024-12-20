@@ -37,4 +37,3 @@ markers = [
     "unit: marks tests as unit tests that do not require a database",
     "integration: marks tests that operate on a real database",
 ]
-

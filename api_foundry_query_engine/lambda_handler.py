@@ -41,4 +41,3 @@ def handler(event, _):
             "headers": {"Content-Type": "application/json"},
             "body": json.dumps({"message": f"exception: {e}"}),
         }
-    

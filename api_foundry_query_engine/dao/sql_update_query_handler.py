@@ -39,7 +39,9 @@ class SQLUpdateSchemaQueryHandler(SQLSchemaQueryHandler):
 
     @property
     def update_values(self) -> str:
-        allowed_properties = self.check_permissions("write", self.schema_object.permissions, self.schema_object.properties)
+        allowed_properties = self.check_permissions(
+            "write", self.schema_object.permissions, self.schema_object.properties
+        )
         self.store_placeholders = {}
         columns = []
         invalid_columns = []
@@ -53,9 +55,16 @@ class SQLUpdateSchemaQueryHandler(SQLSchemaQueryHandler):
                 placeholder = property.api_name
                 column_name = property.column_name
 
-                columns.append(f"{column_name} = {self.placeholder(property, placeholder)}")
-                self.store_placeholders[placeholder] = property.convert_to_db_value(value)
+                columns.append(
+                    f"{column_name} = {self.placeholder(property, placeholder)}"
+                )
+                self.store_placeholders[placeholder] = property.convert_to_db_value(
+                    value
+                )
 
         if invalid_columns:
-            raise ApplicationException(402, f"Subject does not have permission to update properties: {invalid_columns}")
+            raise ApplicationException(
+                402,
+                f"Subject does not have permission to update properties: {invalid_columns}",
+            )
         return f" SET {', '.join(columns)}"

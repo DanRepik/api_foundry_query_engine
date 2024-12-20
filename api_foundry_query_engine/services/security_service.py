@@ -19,9 +19,13 @@ class SecurityService(ServiceAdapter):
         log.debug(f"Executing operation: {operation}")
 
         # Resolve the schema or path operation to retrieve the `security` attribute
-        schema_or_path = self.schema_or_path_resolver(operation.entity, operation.action)
+        schema_or_path = self.schema_or_path_resolver(
+            operation.entity, operation.action
+        )
         if not schema_or_path or "security" not in schema_or_path:
-            raise ValueError(f"No security instructions found for entity {operation.entity}")
+            raise ValueError(
+                f"No security instructions found for entity {operation.entity}"
+            )
 
         security_rules = schema_or_path["security"]
 
@@ -48,7 +52,11 @@ class SecurityService(ServiceAdapter):
         - PermissionError: If a query parameter violates read permissions.
         """
         read_permissions = security_rules.get("read", [])
-        invalid_params = [key for key in query_params if key not in read_permissions and read_permissions != ["*"]]
+        invalid_params = [
+            key
+            for key in query_params
+            if key not in read_permissions and read_permissions != ["*"]
+        ]
         if invalid_params:
             raise PermissionError(f"Query parameters not permitted: {invalid_params}")
 
@@ -64,7 +72,11 @@ class SecurityService(ServiceAdapter):
         - PermissionError: If a store parameter violates write permissions.
         """
         write_permissions = security_rules.get("write", [])
-        invalid_params = [key for key in store_params if key not in write_permissions and write_permissions != ["*"]]
+        invalid_params = [
+            key
+            for key in store_params
+            if key not in write_permissions and write_permissions != ["*"]
+        ]
         if invalid_params:
             raise PermissionError(f"Store parameters not permitted: {invalid_params}")
 

@@ -1,19 +1,18 @@
-
 import os
 import json
 
-from api_foundry_query_engine.utils.api_model import APIModel
 from api_foundry_query_engine.utils.logger import logger
 
 from tests.test_fixtures import db_secrets  # noqa F401
 
 log = logger(__name__)
 
+
 def test_handler(db_secrets):  # noqa F811
     log.info(f"cwd {os.path.join(os.getcwd(), 'resources/api_spec.yaml')}")
 
     os.environ["API_SPEC"] = os.path.join(os.getcwd(), "resources/api_spec.yaml")
-    
+
     from api_foundry_query_engine.lambda_handler import handler
 
     event = {
@@ -57,7 +56,7 @@ def test_handler(db_secrets):  # noqa F811
     }
 
     print(f"current dir: {os.getcwd()}")
-#    ModelFactory.load_yaml(api_spec_path="resources/chinook_api.yaml")
+    #    ModelFactory.load_yaml(api_spec_path="resources/chinook_api.yaml")
     response = handler(event, None)
     assert response["statusCode"] == 200
     albums = json.loads(response["body"])

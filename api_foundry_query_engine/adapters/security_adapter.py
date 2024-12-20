@@ -1,8 +1,12 @@
-
 from typing import Optional
 
 from api_foundry_query_engine.operation import Operation
+from api_foundry_query_engine.services.service import Service
 from api_foundry_query_engine.adapters.adapter import Adapter
+from api_foundry_query_engine.utils.logger import logger
+
+log = logger(__name__)
+
 
 class SecurityAdapter(Adapter):
     def __init__(self, service: Optional[Service] = None, permissions: dict = None):
@@ -11,7 +15,7 @@ class SecurityAdapter(Adapter):
 
         Parameters:
         - service (Service): The service used to process operations.
-        - permissions (dict): A dictionary containing the user's permissions, 
+        - permissions (dict): A dictionary containing the user's permissions,
                               structured as:
                               {
                                   "read": ["field1", "field2", ...],

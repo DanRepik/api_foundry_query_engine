@@ -108,7 +108,9 @@ class SQLQueryHandler:
     operation: Operation
     engine: str
 
-    def __init__(self, operation: Operation, engine: str): #, schema_object: SchemaObject):
+    def __init__(
+        self, operation: Operation, engine: str
+    ):  # , schema_object: SchemaObject):
         self.operation = operation
         self.engine = engine
         self.__select_list_columns = None
@@ -161,7 +163,12 @@ class SQLQueryHandler:
             return f":{param}"
         return f"%({param})s"
 
-    def check_permissions(self, permission_type: str, permissions: Optional[dict], properties: Optional[List[str]]) -> Dict[str, SchemaObjectProperty]:
+    def check_permissions(
+        self,
+        permission_type: str,
+        permissions: Optional[dict],
+        properties: Optional[List[str]],
+    ) -> Dict[str, SchemaObjectProperty]:
         """
         Checks the user's permissions for the specified permission type.
 
@@ -174,10 +181,12 @@ class SQLQueryHandler:
             List[str]: A list of properties the user is permitted to access.
         """
         # if permissions are not defined then no restrictions are applied
-        log.info(f"checking permissions permission_type: {permission_type}, permissions: {permissions}")
+        log.info(
+            f"checking permissions permission_type: {permission_type}, permissions: {permissions}"
+        )
         if not permissions:
             return properties
-        
+
         allowed_properties = {}
 
         for role in self.operation.roles:
@@ -187,9 +196,13 @@ class SQLQueryHandler:
                 continue
             for prop_name, property in properties.items():
                 log.info(f"prop_name: {prop_name}, property: {property}")
-                if permission_type == "read" and re.match(role_permissions.get("read", ""), prop_name):
+                if permission_type == "read" and re.match(
+                    role_permissions.get("read", ""), prop_name
+                ):
                     allowed_properties[prop_name] = property
-                if permission_type == "write" and re.match(role_permissions.get("write", ""), prop_name):
+                if permission_type == "write" and re.match(
+                    role_permissions.get("write", ""), prop_name
+                ):
                     allowed_properties[prop_name] = property
 
         log.info(f"allowed_properties: {allowed_properties}")
@@ -198,7 +211,7 @@ class SQLQueryHandler:
     @property
     def selection_results(self) -> Dict:
         raise NotImplementedError()
-    
+
     def generate_sql_condition(
         self, property: SchemaObjectProperty, value, prefix: Optional[str] = None
     ) -> str:
@@ -272,6 +285,7 @@ class SQLQueryHandler:
         sql_condition = self.generate_sql_condition(property, value, prefix)
         placeholders = self.generate_placeholders(property, value, prefix)
         return sql_condition, placeholders
+
 
 class SQLSchemaQueryHandler(SQLQueryHandler):
     schema_object: SchemaObject
@@ -347,7 +361,9 @@ class SQLSchemaQueryHandler(SQLQueryHandler):
         if not hasattr(self, "__selection_results"):
             log.info(f"prefix_map: {self.prefix_map}")
             filters = self.operation.metadata_params.get("_properties", ".*").split()
-            allowed_properties = self.check_permissions("read", self.schema_object.permissions, self.schema_object.properties)
+            allowed_properties = self.check_permissions(
+                "read", self.schema_object.permissions, self.schema_object.properties
+            )
             self.__selection_results = self.filter_and_prefix_keys(
                 filters, allowed_properties
             )

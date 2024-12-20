@@ -1,10 +1,7 @@
 from api_foundry_query_engine.dao.sql_query_handler import SQLSchemaQueryHandler
 from api_foundry_query_engine.operation import Operation
 from api_foundry_query_engine.utils.app_exception import ApplicationException
-from api_foundry_query_engine.utils.api_model import (
-    SchemaObject,
-    SchemaObjectProperty
-)
+from api_foundry_query_engine.utils.api_model import SchemaObject, SchemaObjectProperty
 from api_foundry_query_engine.utils.logger import logger
 
 log = logger(__name__)
@@ -125,21 +122,30 @@ class SQLSelectSchemaQueryHandler(SQLSchemaQueryHandler):
             self._selection_results = {}
             if "count" in self.operation.metadata_params:
                 self._selection_results = {
-                    "count": SchemaObjectProperty( {
-                        "api_name": "count",
-                        "api_type": "integer",
-                        "column_name": "count(*)",
-                        "column_type": "integer"
-                    } )
+                    "count": SchemaObjectProperty(
+                        {
+                            "api_name": "count",
+                            "api_type": "integer",
+                            "column_name": "count(*)",
+                            "column_type": "integer",
+                        }
+                    )
                 }
                 return self._selection_results
 
-            log.info("selection_result_map")
+            log.info(f"self.schema_object: {self.schema_object}")
             filter_str = self.operation.metadata_params.get("properties", ".*")
+            log.info(f"filter_str: {filter_str}")
+
+            log.info(
+                f"self.get_regex_map(filter_str): {self.get_regex_map(filter_str)}"
+            )
 
             for relation, reg_exs in self.get_regex_map(filter_str).items():
+                log.info(f"relation: {relation}, reg_exs: {reg_exs}")
                 # Extract the schema object for the current entity
                 relation_property = self.schema_object.relations.get(relation)
+                log.info(f"relation_property: {relation_property}")
 
                 if relation_property:
                     if relation_property.type == "array":
@@ -150,6 +156,9 @@ class SQLSelectSchemaQueryHandler(SQLSchemaQueryHandler):
                 else:
                     schema_object = self.schema_object
 
+                log.info(
+                    f"schema_object: {self.schema_object}, prefix_map: {self.prefix_map}"
+                )
                 if relation not in self.prefix_map:
                     raise ApplicationException(
                         400,
@@ -162,7 +171,9 @@ class SQLSelectSchemaQueryHandler(SQLSchemaQueryHandler):
                 # Filter and prefix keys for the current entity
                 # and regular expressions
                 log.info(f"schema_object: {vars(schema_object)}")
-                allowed_properties = self.check_permissions("read", schema_object.permissions, schema_object.properties)
+                allowed_properties = self.check_permissions(
+                    "read", schema_object.permissions, schema_object.properties
+                )
                 log.info(f"allowed_properties: {allowed_properties}")
                 filtered_keys = self.filter_and_prefix_keys(
                     reg_exs, allowed_properties, self.prefix_map[relation]
@@ -172,7 +183,10 @@ class SQLSelectSchemaQueryHandler(SQLSchemaQueryHandler):
                 self._selection_results.update(filtered_keys)
 
             if len(self._selection_results) == 0:
-                raise ApplicationException(402, "After applying permissions there are no properties returned in response")
+                raise ApplicationException(
+                    402,
+                    "After applying permissions there are no properties returned in response",
+                )
         return self._selection_results
 
     def get_regex_map(self, filter_str: str) -> dict[str, list]:
@@ -180,8 +194,10 @@ class SQLSelectSchemaQueryHandler(SQLSchemaQueryHandler):
 
         for filter in filter_str.split():
             parts = filter.split(":")
+            log.info(f"parts: {parts}")
             entity = parts[0] if len(parts) > 1 else self.schema_object.api_name
             expression = parts[-1]
+            log.info(f"entity: {entity}, expression: {expression}")
 
             # Check if entity already exists in result, if not, initialize
             # it with an empty list
@@ -198,7 +214,11 @@ class SQLSelectSchemaQueryHandler(SQLSchemaQueryHandler):
         for name, value in record.items():
             property = self.selection_results[name]
             parts = name.split(".")
-            component = parts[0] if len(parts) > 1 else self.prefix_map[self.schema_object.api_name]
+            component = (
+                parts[0]
+                if len(parts) > 1
+                else self.prefix_map[self.schema_object.api_name]
+            )
             object = object_set.get(component, {})
             if not object:
                 object_set[component] = object

@@ -14,7 +14,7 @@ log = logger(__name__)
 
 @pytest.fixture
 def load_model():
-    log.info(f"model path: {os.environ.get("API_SPEC", "/var/task/api_spec.yaml")}")
+    log.info(f"model path: {os.environ.get('API_SPEC', '/var/task/api_spec.yaml')}")
     with open(os.path.join(os.getcwd(), "resources/api_spec.yaml"), "r") as file:
         APIModel(yaml.safe_load(file))
 

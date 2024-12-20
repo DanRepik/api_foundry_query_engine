@@ -129,9 +129,7 @@ class TestMetadataOperations:
 
     def test_limit(self, load_model, db_secrets):  # noqa F811
         result = TransactionalService().execute(
-            Operation(
-                entity="invoice", action="read", metadata_params={"limit": 50}
-            )
+            Operation(entity="invoice", action="read", metadata_params={"limit": 50})
         )
         log.debug(f"result: {len(result)}")
         assert len(result) == 50

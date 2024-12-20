@@ -7,6 +7,7 @@ from api_foundry_query_engine.utils.logger import logger
 
 log = logger(__name__)
 
+
 class SQLInsertSchemaQueryHandler(SQLSchemaQueryHandler):
     key_property: Optional[SchemaObjectProperty]
 
@@ -69,7 +70,9 @@ class SQLInsertSchemaQueryHandler(SQLSchemaQueryHandler):
         placeholders = []
         columns = []
 
-        allowed_properties = self.check_permissions("write", self.schema_object.permissions, self.schema_object.properties)
+        allowed_properties = self.check_permissions(
+            "write", self.schema_object.permissions, self.schema_object.properties
+        )
         log.info(f"allowed properties: {allowed_properties}")
         for name, value in self.operation.store_params.items():
             parts = name.split(".")
@@ -86,11 +89,16 @@ class SQLInsertSchemaQueryHandler(SQLSchemaQueryHandler):
                 if parts[0] not in self.schema_object.properties:
                     raise ApplicationException(400, f"Invalid property: {name}")
                 else:
-                    raise ApplicationException(402, f"Subject is not allowed to create with property: {parts[0]}")
-            
+                    raise ApplicationException(
+                        402,
+                        f"Subject is not allowed to create with property: {parts[0]}",
+                    )
+
             columns.append(property.column_name)
             placeholders.append(self.placeholder(property, property.api_name))
-            self.store_placeholders[property.api_name] = property.convert_to_db_value(value)
+            self.store_placeholders[property.api_name] = property.convert_to_db_value(
+                value
+            )
 
         if self.key_property:
             if self.key_property.key_type == "sequence":

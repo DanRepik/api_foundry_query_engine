@@ -1,4 +1,3 @@
-
 import yaml
 
 from datetime import datetime
@@ -29,7 +28,7 @@ class SchemaObjectProperty:
 
     def __repr__(self):
         return f"SchemaObjectProperty(api_name={self.api_name}, column_name={self.column_name}, type={self.type})"
-    
+
     def convert_to_db_value(self, value: str) -> Optional[Any]:
         if value is None:
             return None
@@ -63,7 +62,6 @@ class SchemaObjectProperty:
         return conversion_func(value)
 
 
-
 class SchemaObjectAssociation:
     """Represents an association (relationship) between schema objects."""
 
@@ -77,19 +75,30 @@ class SchemaObjectAssociation:
 
     @property
     def child_property(self) -> str:
-        return self._child_property if self._child_property else get_schema_object(self.schema_name).primary_key.column_name
+        return (
+            self._child_property
+            if self._child_property
+            else get_schema_object(self.schema_name).primary_key.column_name
+        )
 
     @property
     def parent_property(self) -> str:
-        return self._parent_property if self._parent_property else get_schema_object(self.parent_schema).primary_key.column_name
+        return (
+            self._parent_property
+            if self._parent_property
+            else get_schema_object(self.parent_schema).primary_key.column_name
+        )
 
     def __repr__(self):
-        return f"SchemaObjectAssociation(name={self.api_name}, child_property={self._child_property}, parent_property={self.parent_property})"
+        return (
+            f"SchemaObjectAssociation(name={self.api_name}, "
+            + f"child_property={self._child_property}, "
+            + f"parent_property={self.parent_property})"
+        )
 
     @property
     def child_schema_object(self) -> "SchemaObject":
         return get_schema_object(self.schema_name)
-
 
 
 class SchemaObject:
@@ -122,6 +131,7 @@ class SchemaObject:
     def primary_key(self):
         return self.properties.get(self._primary_key)
 
+
 class PathOperation:
     """Represents a path operation in the API configuration."""
 
@@ -147,12 +157,14 @@ class PathOperation:
 schema_objects = None
 path_operations = None
 
+
 def get_schema_object(name: str) -> Optional[SchemaObject]:
     """Returns a schema object by name."""
     global schema_objects
     return schema_objects.get(name)
 
-def get_path_operation(path: str, method:str) -> Optional[PathOperation]:
+
+def get_path_operation(path: str, method: str) -> Optional[PathOperation]:
     """Returns a path operation by name."""
     log.info(f"path: {path}, method: {method}")
     global path_operations
@@ -176,10 +188,12 @@ class APIModel:
         }
 
     def __repr__(self):
-        return f"APIModel(schema_objects={list(self.schema_objects.keys())}, path_operations={list(self.path_operations.keys())})"
+        return (
+            f"APIModel(schema_objects={list(self.schema_objects.keys())}, "
+            + f"path_operations={list(self.path_operations.keys())})"
+        )
 
 
 def load_api(filename: str):
     with open(filename, "r") as file:
         APIModel(yaml.safe_load(file))
-
