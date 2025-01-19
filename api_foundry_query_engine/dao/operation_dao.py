@@ -1,16 +1,29 @@
 from typing import Union
 
 from api_foundry_query_engine.dao.sql_custom_query_handler import SQLCustomQueryHandler
-from api_foundry_query_engine.dao.sql_delete_query_handler import SQLDeleteSchemaQueryHandler
-from api_foundry_query_engine.dao.sql_insert_query_handler import SQLInsertSchemaQueryHandler
-from api_foundry_query_engine.dao.sql_select_query_handler import SQLSelectSchemaQueryHandler
-from api_foundry_query_engine.dao.sql_subselect_query_handler import SQLSubselectSchemaQueryHandler
-from api_foundry_query_engine.dao.sql_update_query_handler import SQLUpdateSchemaQueryHandler
+from api_foundry_query_engine.dao.sql_delete_query_handler import (
+    SQLDeleteSchemaQueryHandler,
+)
+from api_foundry_query_engine.dao.sql_insert_query_handler import (
+    SQLInsertSchemaQueryHandler,
+)
+from api_foundry_query_engine.dao.sql_select_query_handler import (
+    SQLSelectSchemaQueryHandler,
+)
+from api_foundry_query_engine.dao.sql_subselect_query_handler import (
+    SQLSubselectSchemaQueryHandler,
+)
+from api_foundry_query_engine.dao.sql_update_query_handler import (
+    SQLUpdateSchemaQueryHandler,
+)
 from api_foundry_query_engine.utils.app_exception import ApplicationException
 from api_foundry_query_engine.dao.dao import DAO
 from api_foundry_query_engine.connectors.connection import Cursor
 from api_foundry_query_engine.operation import Operation
-from api_foundry_query_engine.utils.api_model import get_schema_object, get_path_operation
+from api_foundry_query_engine.utils.api_model import (
+    get_schema_object,
+    get_path_operation,
+)
 from api_foundry_query_engine.dao.sql_query_handler import SQLQueryHandler
 
 

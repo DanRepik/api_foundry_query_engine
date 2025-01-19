@@ -20,7 +20,7 @@ class TestSQLGenerator:
                 query_params={
                     "start": "2022-01-01T00:00:00",
                     "end": "2022-01-07T00:00:00",
-                    "limit": 10
+                    "limit": 10,
                 },
             ),
             get_path_operation("top_selling_albums", "read"),
@@ -38,7 +38,7 @@ class TestSQLGenerator:
         assert (
             sql_operation.sql
             == "SELECT a.album_id as album_id, a.title AS album_title, "
-            + "COUNT(il.invoice_line_id) AS total_sold " 
+            + "COUNT(il.invoice_line_id) AS total_sold "
             + "FROM invoice_line il "
             + "JOIN invoice i ON il.invoice_id = i.invoice_id "
             + "JOIN track t ON il.track_id = t.track_id "
@@ -79,7 +79,7 @@ class TestSQLGenerator:
         assert (
             sql_operation.sql
             == "SELECT a.album_id as album_id, a.title AS album_title, "
-            + "COUNT(il.invoice_line_id) AS total_sold " 
+            + "COUNT(il.invoice_line_id) AS total_sold "
             + "FROM invoice_line il "
             + "JOIN invoice i ON il.invoice_id = i.invoice_id "
             + "JOIN track t ON il.track_id = t.track_id "

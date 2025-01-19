@@ -34,7 +34,7 @@ class ConnectionFactory:
         db_config = self.db_config_map.get(database)
         if not db_config:
             secret_name = json.loads(os.environ.get("SECRETS", "{}")).get(database)
-            log.info(f"secret_name: {secret_name}")
+            log.debug(f"secret_name: {secret_name}")
 
             if secret_name:
                 db_config = self.__get_secret(secret_name)
@@ -70,7 +70,7 @@ class ConnectionFactory:
         sts_client = boto3.client("sts", endpoint_url=endpoint_url)
 
         secret_account_id = os.environ.get("SECRET_ACCOUNT_ID", None)
-        log.info(f"secret_account_id: {secret_account_id}")
+        log.debug(f"secret_account_id: {secret_account_id}")
 
         if secret_account_id:
             # If a secret account ID is provided, assume a role in that account

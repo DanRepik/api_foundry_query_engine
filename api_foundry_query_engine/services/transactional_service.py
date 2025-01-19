@@ -6,7 +6,10 @@ from api_foundry_query_engine.operation import Operation
 from api_foundry_query_engine.services.service import ServiceAdapter
 from api_foundry_query_engine.connectors.connection_factory import connection_factory
 from api_foundry_query_engine.dao.operation_dao import OperationDAO
-from api_foundry_query_engine.utils.api_model import get_path_operation, get_schema_object
+from api_foundry_query_engine.utils.api_model import (
+    get_path_operation,
+    get_schema_object,
+)
 
 log = logger(__name__)
 
@@ -21,7 +24,9 @@ class TransactionalService(ServiceAdapter):
             if schema_object:
                 database = schema_object.database
             else:
-                raise ApplicationException(500, f"Unknown operation: {operation.entity}")
+                raise ApplicationException(
+                    500, f"Unknown operation: {operation.entity}"
+                )
 
         connection = connection_factory.get_connection(database)
 

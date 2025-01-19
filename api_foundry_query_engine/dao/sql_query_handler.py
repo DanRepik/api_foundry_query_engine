@@ -108,10 +108,12 @@ class SQLQueryHandler:
     operation: Operation
     engine: str
 
-    def __init__(self, operation: Operation, engine: str):
+    def __init__(
+        self, operation: Operation, engine: str
+    ):  # , schema_object: SchemaObject):
         self.operation = operation
-        self.__select_list_columns = None
         self.engine = engine
+        self.__select_list_columns = None
 
     @property
     def sql(self) -> str:
@@ -124,14 +126,26 @@ class SQLQueryHandler:
     @property
     def select_list_columns(self) -> List[str]:
         if not self.__select_list_columns:
+            # Filter columns based on read permissions
             self.__select_list_columns = list(self.selection_results.keys())
         return self.__select_list_columns
 
     def marshal_record(self, record: dict) -> dict:
+        """
+        Converts a database record to an API-compatible dictionary,
+        removing properties the user is not allowed to read.
+
+        Args:
+            record (dict): A dictionary representing a single database record.
+
+        Returns:
+            dict: A dictionary with only the properties the user is allowed to see.
+        """
         result = {}
         for name, value in record.items():
-            property = self.selection_results[name]
-            result[property.api_name] = property.convert_to_api_value(value)
+            if name in self.selection_results:  # Check if the property is allowed
+                property = self.selection_results[name]
+                result[property.api_name] = property.convert_to_api_value(value)
         return result
 
     def placeholder(self, property: SchemaObjectProperty, param: str = "") -> str:
@@ -148,11 +162,59 @@ class SQLQueryHandler:
             return f":{param}"
         return f"%({param})s"
 
+    def check_permissions(
+        self,
+        permission_type: str,
+        permissions: Optional[dict],
+        properties: Optional[List[str]],
+    ) -> Dict[str, SchemaObjectProperty]:
+        """
+        Checks the user's permissions for the specified permission type.
+
+        Args:
+            permission_type (str): The type of permission to check ("read" or "write").
+            properties (List[str], optional): Specific properties to check. If None,
+                all schema properties are checked.
+
+        Returns:
+            List[str]: A list of properties the user is permitted to access.
+        """
+        # if permissions are not defined then no restrictions are applied
+        log.info(
+            f"checking permissions permission_type: {permission_type}, permissions: {permissions}"
+        )
+        if not permissions:
+            return properties
+
+        allowed_properties = {}
+
+        for role in self.operation.roles:
+            role_permissions = permissions.get(role, {})
+            log.info(f"role: {role}, role_permissions: {role_permissions}")
+            if len(role_permissions) == 0:
+                continue
+            for prop_name, property in properties.items():
+                log.info(f"prop_name: {prop_name}, property: {property}")
+                if permission_type == "read" and re.match(
+                    role_permissions.get("read", ""), prop_name
+                ):
+                    allowed_properties[prop_name] = property
+                if permission_type == "write" and re.match(
+                    role_permissions.get("write", ""), prop_name
+                ):
+                    allowed_properties[prop_name] = property
+
+        log.info(f"allowed_properties: {allowed_properties}")
+        return allowed_properties
+
+    @property
+    def selection_results(self) -> Dict:
+        raise NotImplementedError()
+
     def generate_sql_condition(
         self, property: SchemaObjectProperty, value, prefix: Optional[str] = None
     ) -> str:
         operand = "="
-
         if isinstance(value, str):
             parts = value.split("::", 1)
             operand = RELATIONAL_TYPES.get(parts[0], "=") if len(parts) > 1 else "="
@@ -223,15 +285,6 @@ class SQLQueryHandler:
         placeholders = self.generate_placeholders(property, value, prefix)
         return sql_condition, placeholders
 
-    @property
-    def selection_results(self) -> Dict:
-        if not hasattr(self, "_selection_results"):
-            self._selection_results = self.selection_result_map()
-        return self._selection_results
-
-    def selection_result_map(self) -> Dict:
-        raise NotImplementedError()
-
 
 class SQLSchemaQueryHandler(SQLQueryHandler):
     schema_object: SchemaObject
@@ -296,6 +349,26 @@ class SQLSchemaQueryHandler(SQLQueryHandler):
         return self.schema_object.table_name
 
     @property
+    def selection_results(self) -> Dict:
+        """
+        Filters the schema properties to include only those the user is allowed to read.
+
+        Returns:
+            dict: A dictionary of allowed schema properties.
+        """
+        log.info("selection_result")
+        if not hasattr(self, "__selection_results"):
+            log.info(f"prefix_map: {self.prefix_map}")
+            filters = self.operation.metadata_params.get("_properties", ".*").split()
+            allowed_properties = self.check_permissions(
+                "read", self.schema_object.permissions, self.schema_object.properties
+            )
+            self.__selection_results = self.filter_and_prefix_keys(
+                filters, allowed_properties
+            )
+        return self.__selection_results
+
+    @property
     def search_condition(self) -> str:
         self.search_placeholders = {}
         conditions = []
@@ -329,14 +402,6 @@ class SQLSchemaQueryHandler(SQLQueryHandler):
             conditions.append(assignment)
             self.search_placeholders.update(holders)
         return f" WHERE {' AND '.join(conditions)}" if conditions else ""
-
-    def selection_result_map(self) -> dict:
-        if not self.__selection_result_map:
-            filters = self.operation.metadata_params.get("_properties", ".*").split()
-            self.__selection_result_map = self.filter_and_prefix_keys(
-                filters, self.schema_object.properties
-            )
-        return self.__selection_result_map
 
     def filter_and_prefix_keys(
         self, regex_list: List[str], properties: dict, prefix: Optional[str] = None

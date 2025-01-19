@@ -3,7 +3,7 @@ import pytest
 from datetime import date, datetime, timezone
 import os
 
-from api_foundry_query_engine.utils.api_model import APIModel, get_schema_object
+from api_foundry_query_engine.utils.api_model import get_schema_object
 from api_foundry_query_engine.dao.operation_dao import OperationDAO
 from api_foundry_query_engine.dao.sql_delete_query_handler import (
     SQLDeleteSchemaQueryHandler,
@@ -15,10 +15,7 @@ from api_foundry_query_engine.dao.sql_subselect_query_handler import (
     SQLSubselectSchemaQueryHandler,
 )
 from api_foundry_query_engine.utils.app_exception import ApplicationException
-from api_foundry_query_engine.utils.api_model import (
-    SchemaObject,
-    SchemaObjectProperty,
-)
+from api_foundry_query_engine.utils.api_model import SchemaObjectProperty
 from api_foundry_query_engine.operation import Operation
 from api_foundry_query_engine.utils.logger import logger
 from tests.test_schema_objects_fixtures import (
@@ -39,7 +36,7 @@ class TestSQLHandler:
             "postgres",
         )
         log.info(f"prefix_map: {sql_handler.prefix_map}")
-        result_map = sql_handler.selection_result_map()
+        result_map = sql_handler.selection_results
         log.info(f"result_map: {result_map}")
         assert len(result_map) == 10
         assert result_map.get("i.invoice_id") is not None
@@ -56,7 +53,7 @@ class TestSQLHandler:
             "postgres",
         )
 
-        result_map = sql_handler.selection_result_map()
+        result_map = sql_handler.selection_results
         log.info(f"result_map: {result_map}")
         assert len(result_map) == 24
         assert result_map.get("i.invoice_id") is not None
@@ -80,8 +77,9 @@ class TestSQLHandler:
 
         assert (
             sql_handler.sql
-            == "SELECT i.billing_address, i.billing_city, i.billing_country, i.billing_postal_code, i.billing_state, i.customer_id, i.invoice_date, i.invoice_id, i.last_updated, i.total " 
-            + "FROM invoice AS i " 
+            == "SELECT i.billing_address, i.billing_city, i.billing_country, i.billing_postal_code, "
+            + "i.billing_state, i.customer_id, i.invoice_date, i.invoice_id, i.last_updated, i.total "
+            + "FROM invoice AS i "
             + "WHERE i.invoice_id = %(i_invoice_id)s AND i.total > %(i_total)s"  # noqa E501
         )
         assert sql_handler.placeholders == {"i_invoice_id": 24, "i_total": 5.0}
@@ -156,10 +154,11 @@ class TestSQLHandler:
             )
             assert (
                 sql_operation.sql
-                == "SELECT i.billing_address, i.billing_city, i.billing_country, i.billing_postal_code, i.billing_state, i.customer_id, i.invoice_date, i.invoice_id, i.last_updated, i.total " 
-                + "FROM invoice AS i " 
-                + "INNER JOIN customer AS c ON i.customer_id = c.customer_id " 
-                + "WHERE i.invoice_id > %(i_invoice_id)s AND c.customer_id > %(c_customer_id)s" 
+                == "SELECT i.billing_address, i.billing_city, i.billing_country, i.billing_postal_code, "
+                + "i.billing_state, i.customer_id, i.invoice_date, i.invoice_id, i.last_updated, i.total "
+                + "FROM invoice AS i "
+                + "INNER JOIN customer AS c ON i.customer_id = c.customer_id "
+                + "WHERE i.invoice_id > %(i_invoice_id)s AND c.customer_id > %(c_customer_id)s"
             )
             assert sql_operation.placeholders == {
                 "i_invoice_id": 24,
@@ -185,7 +184,9 @@ class TestSQLHandler:
         )
 
         total_property = schema_object.properties["total"]
-        (sql, placeholders) = sql_handler.search_value_assignment(total_property, "1234", "i")
+        (sql, placeholders) = sql_handler.search_value_assignment(
+            total_property, "1234", "i"
+        )
         print(f"sql: {sql}, properties: {placeholders}")
         assert sql == "i.total = %(i_total)s"
         assert isinstance(placeholders["i_total"], float)
@@ -323,11 +324,12 @@ class TestSQLHandler:
         assert placeholders["i_last_updated"] == date(2000, 12, 12)
 
     def test_select_invalid_column(self):
-
         try:
             sql_handler = SQLSelectSchemaQueryHandler(
                 Operation(
-                    entity="invoice", action="read", query_params={"not_a_property": "FL"}
+                    entity="invoice",
+                    action="read",
+                    query_params={"not_a_property": "FL"},
                 ),
                 invoice_with_datetime_version_stamp(),
                 "postgres",
@@ -354,9 +356,12 @@ class TestSQLHandler:
 
         assert (
             sql_handler.sql
-            == "SELECT i.billing_address, i.billing_city, i.billing_country, i.billing_postal_code, i.billing_state, i.customer_id, i.invoice_date, i.invoice_id, i.last_updated, i.total, c.address, c.city, c.company, c.country, c.customer_id, c.email, c.fax, c.first_name, c.last_name, c.phone, c.postal_code, c.state, c.support_rep_id, c.version_stamp "
-            + "FROM invoice AS i " 
-            + "INNER JOIN customer AS c ON i.customer_id = c.customer_id " 
+            == "SELECT i.billing_address, i.billing_city, i.billing_country, i.billing_postal_code, "
+            + "i.billing_state, i.customer_id, i.invoice_date, i.invoice_id, i.last_updated, i.total, "
+            + "c.address, c.city, c.company, c.country, c.customer_id, c.email, c.fax, c.first_name, "
+            + "c.last_name, c.phone, c.postal_code, c.state, c.support_rep_id, c.version_stamp "
+            + "FROM invoice AS i "
+            + "INNER JOIN customer AS c ON i.customer_id = c.customer_id "
             + "WHERE i.billing_state = %(i_billing_state)s"
         )
         assert sql_handler.placeholders == {"i_billing_state": "FL"}
@@ -376,11 +381,14 @@ class TestSQLHandler:
 
         log.info(f"sql: {sql_handler.sql}, placeholders: {sql_handler.placeholders}")
 
-        assert (
-            sql_handler.sql
-            == "SELECT i.billing_address, i.billing_city, i.billing_country, i.billing_postal_code, i.billing_state, i.customer_id, i.invoice_date, i.invoice_id, i.last_updated, i.total, c.address, c.city, c.company, c.country, c.customer_id, c.email, c.fax, c.first_name, c.last_name, c.phone, c.postal_code, c.state, c.support_rep_id, c.version_stamp "
-            + "FROM invoice AS i " 
-            + "INNER JOIN customer AS c ON i.customer_id = c.customer_id WHERE i.billing_state = %(i_billing_state)s"  # noqa E501
+        assert sql_handler.sql == (
+            "SELECT i.billing_address, i.billing_city, i.billing_country, i.billing_postal_code, "
+            + "i.billing_state, i.customer_id, i.invoice_date, i.invoice_id, i.last_updated, i.total, "
+            + "c.address, c.city, c.company, c.country, c.customer_id, c.email, c.fax, c.first_name, "
+            + "c.last_name, c.phone, c.postal_code, c.state, c.support_rep_id, c.version_stamp "
+            + "FROM invoice AS i "
+            + "INNER JOIN customer AS c ON i.customer_id = c.customer_id "
+            + "WHERE i.billing_state = %(i_billing_state)s"
         )
         assert sql_handler.placeholders == {"i_billing_state": "FL"}
 
@@ -438,7 +446,10 @@ class TestSQLHandler:
                 f"sql-x: {sql_handler.sql}, placeholders: {sql_handler.placeholders}"  # noqa E501
             )
 
-            assert sql_handler.sql == "SELECT g.genre_id, g.name, g.last_updated FROM genre AS g"
+            assert (
+                sql_handler.sql
+                == "SELECT g.genre_id, g.name, g.last_updated FROM genre AS g"
+            )
             assert sql_handler.placeholders == {}
 
         except ApplicationException as e:
@@ -481,12 +492,12 @@ class TestSQLHandler:
         log.info(f"sql_handler: {sql_handler.sql}")
         assert (
             sql_handler.sql
-            == "SELECT i.billing_address, i.billing_city, i.billing_country, i.billing_postal_code, i.billing_state, " 
-            + "i.customer_id, i.invoice_date, i.invoice_id, i.last_updated, i.total, " 
-            + "c.address, c.city, c.company, c.country, c.customer_id, c.email, c.fax, c.first_name, c.last_name, " 
-            + "c.phone, c.postal_code, c.state, c.support_rep_id, c.version_stamp " 
-            + "FROM invoice AS i " 
-            + "INNER JOIN customer AS c ON i.customer_id = c.customer_id " 
+            == "SELECT i.billing_address, i.billing_city, i.billing_country, i.billing_postal_code, i.billing_state, "
+            + "i.customer_id, i.invoice_date, i.invoice_id, i.last_updated, i.total, "
+            + "c.address, c.city, c.company, c.country, c.customer_id, c.email, c.fax, c.first_name, c.last_name, "
+            + "c.phone, c.postal_code, c.state, c.support_rep_id, c.version_stamp "
+            + "FROM invoice AS i "
+            + "INNER JOIN customer AS c ON i.customer_id = c.customer_id "
             + "WHERE i.billing_state = %(i_billing_state)s"
         )
 
@@ -499,10 +510,10 @@ class TestSQLHandler:
         log.info(f"subselect_sql_generator: {subselect_sql_generator.sql}")
         assert (
             subselect_sql_generator.sql
-            == "SELECT invoice_id, invoice_line_id, quantity, track_id, unit_price " 
-            + "FROM invoice_line " 
+            == "SELECT invoice_id, invoice_line_id, quantity, track_id, unit_price "
+            + "FROM invoice_line "
             + "WHERE invoice_id IN ( SELECT invoice_id FROM invoice AS i WHERE i.billing_state = %(i_billing_state)s )"
         )
 
-        select_map = subselect_sql_generator.selection_result_map()
+        select_map = subselect_sql_generator.selection_results
         log.info(f"select_map: {select_map}")

@@ -5,7 +5,7 @@ from api_foundry_query_engine.utils.logger import logger
 from api_foundry_query_engine.operation import Operation
 from api_foundry_query_engine.services.transactional_service import TransactionalService
 
-from test_fixtures import load_model, db_secrets  # noqa F401
+from tests.test_fixtures import load_model, db_secrets  # noqa F401
 
 log = logger(__name__)
 
@@ -129,9 +129,7 @@ class TestMetadataOperations:
 
     def test_limit(self, load_model, db_secrets):  # noqa F811
         result = TransactionalService().execute(
-            Operation(
-                entity="invoice", action="read", metadata_params={"limit": 50}
-            )
+            Operation(entity="invoice", action="read", metadata_params={"limit": 50})
         )
         log.debug(f"result: {len(result)}")
         assert len(result) == 50
