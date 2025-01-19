@@ -26,11 +26,10 @@ class PostgresCursor(Cursor):
         """
         from psycopg2 import Error, IntegrityError, ProgrammingError
 
-        log.info(f"sql: {sql}, parameters: {parameters}")
+        log.info(f"sql: {sql}")
 
         try:
             # Execute the SQL statement with parameters
-            log.info(f"sql: {self.__cursor.mogrify(sql, parameters)}")
             self.__cursor.execute(sql, parameters)
             result = []
             for record in self.__cursor:
@@ -99,7 +98,9 @@ class PostgresConnection(Connection):
 
         connection_params.update(additional_config)
 
-        log.info(f"connection_params: {connection_params}")
+        log.info(
+            f"connection_params: dbname: {dbname}, user: {user}, host: {host}, port: {port}"
+        )
 
         # Create a connection to the PostgreSQL database
         return connect(**connection_params)

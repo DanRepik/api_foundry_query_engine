@@ -127,7 +127,6 @@ class SQLQueryHandler:
     def select_list_columns(self) -> List[str]:
         if not self.__select_list_columns:
             # Filter columns based on read permissions
-            log.info("select_list_columns")
             self.__select_list_columns = list(self.selection_results.keys())
         return self.__select_list_columns
 

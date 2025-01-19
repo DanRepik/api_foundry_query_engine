@@ -36,11 +36,10 @@ class SQLCustomQueryHandler(SQLQueryHandler):
     @property
     def selection_results(self) -> Dict:
         if not hasattr(self, "_selection_results"):
-            log.info("selection_result_map")
             self._selection_results = self.check_permissions(
                 "read", self.path_operation.permissions, self.path_operation.outputs
             )
-            log.info(f"selection_results: {self._selection_results}")
+            log.debug(f"selection_results: {self._selection_results}")
         return self._selection_results
 
     def _compile(self):
@@ -65,8 +64,5 @@ class SQLCustomQueryHandler(SQLQueryHandler):
             if placeholder_name in self.operation.query_params
             else property.default
         )
-        log.info(f"placeholder_name: {placeholder_name}")
-        log.info(f"value: {value}, default: {property.default}")
-        log.info(f"placeholders: {self.generate_placeholders(property, value)}")
         self._placeholders.update(self.generate_placeholders(property, value))
         return self.placeholder(property, placeholder_name)
