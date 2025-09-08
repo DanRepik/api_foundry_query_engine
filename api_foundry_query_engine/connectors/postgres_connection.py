@@ -9,17 +9,18 @@ class PostgresCursor(Cursor):
     def __init__(self, cursor):
         self.__cursor = cursor
 
-    def execute(self, sql: str, parameters: dict, result_columns: list[str]) -> list:
+    def execute(self, sql: str, params: dict, selection_results: dict) -> list[dict]:
         """
         Execute SQL statements on the PostgreSQL database.
 
         Parameters:
         - cursor: The database cursor.
         - sql (str): The SQL statement to execute.
-        - parameters (dict): Parameters to be used in the SQL statement.
+        - params (dict): Parameters to be used in the SQL statement.
+        - selection_results (dict): Mapping of result columns.
 
         Returns:
-        - None
+        - list[dict]: List of result records as dictionaries.
 
         Raises:
         - AppException: Custom exception for handling database-related errors.
@@ -30,12 +31,12 @@ class PostgresCursor(Cursor):
 
         try:
             # Execute the SQL statement with parameters
-            self.__cursor.execute(sql, parameters)
+            self.__cursor.execute(sql, params)
             result = []
             for record in self.__cursor:
-                # Convert record tuple to dictionary using result_columns
+                # Convert record tuple to dictionary using selection_results
                 result.append(
-                    {col: value for col, value in zip(result_columns, record)}
+                    {col: value for col, value in zip(selection_results, record)}
                 )
 
             return result
@@ -80,7 +81,7 @@ class PostgresConnection(Connection):
         """
         from psycopg2 import connect
 
-        dbname = self.db_config["dbname"]
+        dbname = self.db_config["database"]
         user = self.db_config["username"]
         password = self.db_config["password"]
         host = self.db_config["host"]

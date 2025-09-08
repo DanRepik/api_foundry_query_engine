@@ -1,10 +1,11 @@
 import traceback
+from typing import Optional, Mapping
 
 from api_foundry_query_engine.utils.logger import logger
 from api_foundry_query_engine.utils.app_exception import ApplicationException
 from api_foundry_query_engine.operation import Operation
 from api_foundry_query_engine.services.service import ServiceAdapter
-from api_foundry_query_engine.connectors.connection_factory import connection_factory
+from api_foundry_query_engine.connectors.connection_factory import ConnectionFactory
 from api_foundry_query_engine.dao.operation_dao import OperationDAO
 from api_foundry_query_engine.utils.api_model import (
     get_path_operation,
@@ -15,7 +16,12 @@ log = logger(__name__)
 
 
 class TransactionalService(ServiceAdapter):
-    def execute(self, operation: Operation):
+    def __init__(self, config: Mapping[str, str]):
+        super().__init__()
+        self.config = config
+        self.connection_factory = ConnectionFactory(config) 
+
+    def execute(self, operation: Operation) -> list[dict]:
         path_operation = get_path_operation(operation.entity, operation.action)
         if path_operation:
             database = path_operation.database
@@ -28,17 +34,15 @@ class TransactionalService(ServiceAdapter):
                     500, f"Unknown operation: {operation.entity}"
                 )
 
-        connection = connection_factory.get_connection(database)
+        # Pass config to connection_factory if needed (future extension)
+        connection = self.connection_factory.get_connection(database)
 
         try:
-            result = None
-            cursor = connection.cursor()
-            try:
-                result = OperationDAO(operation, connection.engine()).execute(cursor)
-            finally:
-                cursor.close()
+            result = OperationDAO(operation, connection.engine()).execute(connection)
             if operation.action != "read":
                 connection.commit()
+            if isinstance(result, dict):
+                return [result]
             return result
         except Exception as error:
             log.error(f"transaction exception: {error}")

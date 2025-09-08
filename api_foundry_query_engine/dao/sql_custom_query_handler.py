@@ -30,7 +30,7 @@ class SQLCustomQueryHandler(SQLQueryHandler):
         return self._placeholders
 
     @property
-    def select_list_columns(self) -> List[SchemaObjectProperty]:
+    def select_list_columns(self) -> List[str]:
         raise NotImplementedError()
 
     @property

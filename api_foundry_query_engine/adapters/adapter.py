@@ -1,5 +1,5 @@
 import abc
-from typing import Optional
+from typing import Mapping, Optional
 
 from api_foundry_query_engine.operation import Operation
 from api_foundry_query_engine.services.transactional_service import TransactionalService
@@ -10,7 +10,9 @@ log = logger(__name__)
 
 
 class Adapter(metaclass=abc.ABCMeta):
+
     service: Service
+    config: Mapping[str, str]
 
     @classmethod
     def __subclasshook__(cls, __subclass: type) -> bool:
@@ -21,8 +23,9 @@ class Adapter(metaclass=abc.ABCMeta):
             and callable(__subclass.unmarshal)
         )
 
-    def __init__(self, service: Optional[Service] = None) -> None:
-        self.service = service if service is not None else TransactionalService()
+    def __init__(self, config: Mapping[str, str] = {}, service: Optional[Service] = None) -> None:
+        self.config = config
+        self.service = service if service is not None else TransactionalService(config=self.config)
 
     def unmarshal(self, event) -> Operation:
         """

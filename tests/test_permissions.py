@@ -2,7 +2,7 @@ from yaml import safe_load
 
 from api_foundry_query_engine.operation import Operation
 from api_foundry_query_engine.dao.operation_dao import OperationDAO
-from api_foundry_query_engine.utils.api_model import APIModel, get_schema_object
+from api_foundry_query_engine.utils.api_model import get_schema_object
 from api_foundry_query_engine.utils.app_exception import ApplicationException
 from api_foundry_query_engine.utils.logger import logger
 
@@ -190,9 +190,8 @@ schema_objects:
 """
 
 
-def test_read_some_restrictions():
+def test_read_some_restrictions(chinook_env):
     # sales associates cannot read artist_id or year_released
-    APIModel(safe_load(ALBUM_SCHEMA))
     schema_object = get_schema_object("album")
     log.info(f"schema_object: {schema_object}")
 
@@ -201,7 +200,7 @@ def test_read_some_restrictions():
             entity="album",
             action="read",
             query_params={"album_id": "24"},
-            roles=["sales_associate"],
+            roles={"sales_associate": True},
         ),
         "postgres",
     )
@@ -216,8 +215,7 @@ def test_read_some_restrictions():
     )
 
 
-def test_read_no_restrictions():
-    APIModel(safe_load(ALBUM_SCHEMA))
+def test_read_no_restrictions(chinook_env):
     schema_object = get_schema_object("album")
     log.info(f"schema_object: {schema_object}")
 
@@ -226,7 +224,7 @@ def test_read_no_restrictions():
             entity="album",
             action="read",
             query_params={"album_id": "24"},
-            roles=["sales_manager"],
+            roles={"sales_manager": True},
         ),
         "postgres",
     )
@@ -241,9 +239,8 @@ def test_read_no_restrictions():
     )
 
 
-def test_read_all_restricted():
+def test_read_all_restricted(chinook_env):
     # role does not allow any properties returned
-    APIModel(safe_load(ALBUM_SCHEMA))
     schema_object = get_schema_object("album")
     log.info(f"schema_object: {schema_object}")
 
@@ -252,7 +249,7 @@ def test_read_all_restricted():
             entity="album",
             action="read",
             query_params={"album_id": "24"},
-            roles=["customer_agent"],
+            roles={"customer_agent": True},
         ),
         "postgres",
     )
@@ -273,9 +270,8 @@ def test_read_all_restricted():
         )
 
 
-def test_read_relation_some_restrictions():
+def test_read_relation_some_restrictions(chinook_env):
     # test that permissions are applied to association objects
-    APIModel(safe_load(INVOICE_SCHEMA))
     schema_object = get_schema_object("invoice")
     log.info(f"schema_object: {schema_object}")
 
@@ -285,7 +281,7 @@ def test_read_relation_some_restrictions():
             action="read",
             query_params={"invoice_id": "24"},
             metadata_params={"properties": ".* invoice_line_items:.*"},
-            roles=["sales_associate"],
+            roles={"sales_associate": True},
         ),
         "postgres",
     )
@@ -301,9 +297,8 @@ def test_read_relation_some_restrictions():
     )
 
 
-def test_create_prohibited_property():
+def test_create_prohibited_property(chinook_env):
     # sales associates cannot update title
-    APIModel(safe_load(ALBUM_SCHEMA))
     schema_object = get_schema_object("album")
     log.info(f"schema_object: {schema_object}")
 
@@ -312,7 +307,7 @@ def test_create_prohibited_property():
             entity="album",
             action="create",
             store_params={"title": "something different"},
-            roles=["sales_associate"],
+            roles={"sales_associate": True},
         ),
         "postgres",
     )
@@ -324,9 +319,8 @@ def test_create_prohibited_property():
         assert ae.message == "Subject is not allowed to create with property: title"
 
 
-def test_create_allowed_property():
+def test_create_allowed_property(chinook_env):
     # sales associates cannot update title
-    APIModel(safe_load(ALBUM_SCHEMA))
     schema_object = get_schema_object("album")
     log.info(f"schema_object: {schema_object}")
 
@@ -335,7 +329,7 @@ def test_create_allowed_property():
             entity="album",
             action="create",
             store_params={"year_released": "2024"},
-            roles=["sales_associate"],
+            roles={"sales_associate": True},
         ),
         "postgres",
     )
@@ -348,9 +342,8 @@ def test_create_allowed_property():
     )
 
 
-def test_update_prohibited_property():
+def test_update_prohibited_property(chinook_env):
     # sales associates cannot update title
-    APIModel(safe_load(ALBUM_SCHEMA))
     schema_object = get_schema_object("album")
     log.info(f"schema_object: {schema_object}")
 
@@ -360,7 +353,7 @@ def test_update_prohibited_property():
             action="update",
             query_params={"album_id": "24"},
             store_params={"title": "something different"},
-            roles=["sales_associate"],
+            roles={"sales_associate": True},
         ),
         "postgres",
     )
@@ -375,9 +368,8 @@ def test_update_prohibited_property():
         )
 
 
-def test_update_allowed_property():
+def test_update_allowed_property(chinook_env):
     # sales associates cannot update title
-    APIModel(safe_load(ALBUM_SCHEMA))
     schema_object = get_schema_object("album")
     log.info(f"schema_object: {schema_object}")
 
@@ -387,7 +379,7 @@ def test_update_allowed_property():
             action="update",
             query_params={"album_id": "24"},
             store_params={"year_released": "2024"},
-            roles=["sales_associate"],
+            roles={"sales_associate": True},
         ),
         "postgres",
     )
@@ -400,9 +392,8 @@ def test_update_allowed_property():
     )
 
 
-def test_delete_prohibited():
+def test_delete_prohibited(chinook_env):
     # sales associates cannot delete albums
-    APIModel(safe_load(ALBUM_SCHEMA))
     schema_object = get_schema_object("album")
     log.info(f"schema_object: {schema_object}")
 
@@ -411,7 +402,7 @@ def test_delete_prohibited():
             entity="album",
             action="delete",
             query_params={"album_id": 5},
-            roles=["sales_associate"],
+            roles={"sales_associate": True},
         ),
         "postgres",
     )
@@ -423,9 +414,8 @@ def test_delete_prohibited():
         assert ae.message == "Subject is not allowed to delete album"
 
 
-def test_delete_allowed():
+def test_delete_allowed(chinook_env):
     # sales associates cannot update title
-    APIModel(safe_load(ALBUM_SCHEMA))
     schema_object = get_schema_object("album")
     log.info(f"schema_object: {schema_object}")
 
@@ -434,7 +424,7 @@ def test_delete_allowed():
             entity="album",
             action="delete",
             query_params={"album_id": 5},
-            roles=["sales_manager"],
+            roles={"sales_manager": True},
         ),
         "postgres",
     )

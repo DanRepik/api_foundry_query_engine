@@ -1,7 +1,11 @@
 build
 twine
-pytest
 psycopg2-binary
+pulumi_aws
 
 pytest
+pytest-cov
+docker
+boto3
+PyYAML
 requests

@@ -6,30 +6,28 @@ from api_foundry_query_engine.utils.logger import logger
 from api_foundry_query_engine.operation import Operation
 from api_foundry_query_engine.services.transactional_service import TransactionalService
 
-from test_fixtures import load_model, db_secrets  # noqa F811
-
 log = logger(__name__)
 
 
 @pytest.mark.integration
 class TestQueryOperations:
-    def test_select_all(self, load_model, db_secrets):  # noqa F811
-        result = TransactionalService().execute(
+    def test_select_all(self, chinook_env):  # noqa F811
+        result = TransactionalService(chinook_env).execute(
             Operation(entity="media_type", action="read")
         )
         log.debug(f"len: {len(result)}")
         assert len(result) == 5
 
-    def test_select_one(self, load_model, db_secrets):  # noqa F811
-        result = TransactionalService().execute(
+    def test_select_one(self, chinook_env):  # noqa F811
+        result = TransactionalService(chinook_env).execute(
             Operation(entity="invoice", action="read", query_params={"invoice_id": 2})
         )
         log.info(f"result: {json.dumps(result, indent=4)}")
         assert len(result) == 1
         assert result[0]["invoice_id"] == 2
 
-    def test_select_multiple(self, load_model, db_secrets):  # noqa F811
-        result = TransactionalService().execute(
+    def test_select_multiple(self, chinook_env):  # noqa F811
+        result = TransactionalService(chinook_env).execute(
             Operation(
                 entity="invoice",
                 action="read",
@@ -39,9 +37,9 @@ class TestQueryOperations:
         log.info(f"count: {len(result)}")
         assert len(result) == 24
 
-    def test_select_invalid(self, load_model, db_secrets):  # noqa F811
+    def test_select_invalid(self, chinook_env):  # noqa F811
         try:
-            TransactionalService().execute(
+            TransactionalService(chinook_env).execute(
                 Operation(
                     entity="invoice",
                     action="read",
@@ -56,8 +54,8 @@ class TestQueryOperations:
                 == "Invalid query parameter, property not found. schema object: invoice, property: otal"
             )
 
-    def test_select_gt_le_int(self, load_model, db_secrets):  # noqa F811
-        result = TransactionalService().execute(
+    def test_select_gt_le_int(self, chinook_env):  # noqa F811
+        result = TransactionalService(chinook_env).execute(
             Operation(
                 entity="invoice",
                 action="read",
@@ -67,7 +65,7 @@ class TestQueryOperations:
         log.info(f"result: {json.dumps(result, indent=4)}")
         gt_count = len(result)
 
-        result = TransactionalService().execute(
+        result = TransactionalService(chinook_env).execute(
             Operation(
                 entity="invoice",
                 action="read",
@@ -77,7 +75,7 @@ class TestQueryOperations:
         log.info(f"le_count: {json.dumps(result, indent=4)}")
         le_count = len(result)
 
-        result = TransactionalService().execute(
+        result = TransactionalService(chinook_env).execute(
             Operation(entity="invoice", action="read")
         )
         total_count = len(result)
@@ -85,8 +83,8 @@ class TestQueryOperations:
 
         assert total_count == gt_count + le_count
 
-    def test_select_ge_lt_int(self, load_model, db_secrets):  # noqa F811
-        result = TransactionalService().execute(
+    def test_select_ge_lt_int(self, chinook_env):  # noqa F811
+        result = TransactionalService(chinook_env).execute(
             Operation(
                 entity="invoice",
                 action="read",
@@ -95,7 +93,7 @@ class TestQueryOperations:
         )
         ge_count = len(result)
 
-        result = TransactionalService().execute(
+        result = TransactionalService(chinook_env).execute(
             Operation(
                 entity="invoice",
                 action="read",
@@ -105,7 +103,7 @@ class TestQueryOperations:
         lt_count = len(result)
         log.info(f"lt_count: {lt_count}")
 
-        result = TransactionalService().execute(
+        result = TransactionalService(chinook_env).execute(
             Operation(entity="invoice", action="read")
         )
         total_count = len(result)
@@ -113,8 +111,8 @@ class TestQueryOperations:
 
         assert total_count == ge_count + lt_count
 
-    def test_select_between_int(self, load_model, db_secrets):  # noqa F811
-        result = TransactionalService().execute(
+    def test_select_between_int(self, chinook_env):  # noqa F811
+        result = TransactionalService(chinook_env).execute(
             Operation(
                 entity="invoice",
                 action="read",
@@ -124,7 +122,7 @@ class TestQueryOperations:
         between_count = len(result)
         log.info(f"between_count: {between_count}")
 
-        result = TransactionalService().execute(
+        result = TransactionalService(chinook_env).execute(
             Operation(
                 entity="invoice",
                 action="read",
@@ -134,7 +132,7 @@ class TestQueryOperations:
         not_between_count = len(result)
         log.info(f"not_between_count: {not_between_count}")
 
-        result = TransactionalService().execute(
+        result = TransactionalService(chinook_env).execute(
             Operation(entity="invoice", action="read")
         )
         total_count = len(result)
@@ -142,8 +140,8 @@ class TestQueryOperations:
 
         assert total_count == between_count + not_between_count
 
-    def test_select_in_int(self, load_model, db_secrets):  # noqa F811
-        result = TransactionalService().execute(
+    def test_select_in_int(self, chinook_env):  # noqa F811
+        result = TransactionalService(chinook_env).execute(
             Operation(
                 entity="invoice",
                 action="read",
@@ -153,7 +151,7 @@ class TestQueryOperations:
         in_count = len(result)
         log.info(f"in_count: {in_count}")
 
-        result = TransactionalService().execute(
+        result = TransactionalService(chinook_env).execute(
             Operation(
                 entity="invoice",
                 action="read",
@@ -163,7 +161,7 @@ class TestQueryOperations:
         not_in_count = len(result)
         log.info(f"not_in_count: {not_in_count}")
 
-        result = TransactionalService().execute(
+        result = TransactionalService(chinook_env).execute(
             Operation(entity="invoice", action="read")
         )
         total_count = len(result)
@@ -171,8 +169,8 @@ class TestQueryOperations:
 
         assert total_count == in_count + not_in_count
 
-    def test_select_ge_lt_timestamp(self, load_model, db_secrets):  # noqa F811
-        result = TransactionalService().execute(
+    def test_select_ge_lt_timestamp(self, chinook_env):  # noqa F811
+        result = TransactionalService(chinook_env).execute(
             Operation(
                 entity="invoice",
                 action="read",
@@ -182,7 +180,7 @@ class TestQueryOperations:
         ge_count = len(result)
         log.info(f"ge_count: {ge_count}")
 
-        result = TransactionalService().execute(
+        result = TransactionalService(chinook_env).execute(
             Operation(
                 entity="invoice",
                 action="read",
@@ -192,7 +190,7 @@ class TestQueryOperations:
         lt_count = len(result)
         log.info(f"lt_count: {lt_count}")
 
-        result = TransactionalService().execute(
+        result = TransactionalService(chinook_env).execute(
             Operation(entity="invoice", action="read")
         )
         total_count = len(result)

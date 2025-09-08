@@ -50,7 +50,7 @@ class SQLSelectSchemaQueryHandler(SQLSchemaQueryHandler):
                         raise ApplicationException(
                             400,
                             "Invalid selection property "
-                            + self.schema_object.api_name
+                            + str(self.schema_object.api_name)
                             + " does not have a property "
                             + parts[0],
                         )
@@ -59,7 +59,7 @@ class SQLSelectSchemaQueryHandler(SQLSchemaQueryHandler):
                         raise ApplicationException(
                             400,
                             "Property not found, "
-                            + relation.child_schema_object.api_name
+                            + str(relation.child_schema_object.api_name)
                             + " does not have property "
                             + parts[1],
                         )
@@ -67,17 +67,20 @@ class SQLSelectSchemaQueryHandler(SQLSchemaQueryHandler):
                     prefix = self.prefix_map[parts[0]]
                 else:
                     property = self.schema_object.properties[parts[0]]
+                    if self.schema_object.api_name is None:
+                        raise ApplicationException(
+                            500,
+                            "schema_object.api_name is None, cannot use as key in prefix_map"
+                        )
                     prefix = self.prefix_map[self.schema_object.api_name]
             except KeyError:
                 raise ApplicationException(
                     500,
-                    (
-                        "Invalid query parameter, property not found. "
-                        + "schema object: "
-                        + self.schema_object.api_name
-                        + ", property: "
-                        + name
-                    ),
+                    "Invalid query parameter, property not found. "
+                    + "schema object: "
+                    + str(self.schema_object.api_name)
+                    + ", property: "
+                    + name
                 )
 
             assignment, holders = self.search_value_assignment(property, value, prefix)
@@ -90,13 +93,13 @@ class SQLSelectSchemaQueryHandler(SQLSchemaQueryHandler):
     @property
     def table_expression(self) -> str:
         joins = []
-        parent_prefix = self.prefix_map[self.schema_object.api_name]
+        parent_prefix = self.prefix_map[str(self.schema_object.api_name)]
         for name, relation in self.schema_object.relations.items():
-            child_prefix = self.prefix_map[relation.api_name]
+            child_prefix = self.prefix_map[str(relation.api_name)]
             if child_prefix in self.active_prefixes:
                 joins.append(
                     "INNER JOIN "
-                    + relation.child_schema_object.table_name
+                    + str(relation.child_schema_object.table_name)
                     + " AS "
                     + child_prefix
                     + " ON "
@@ -110,9 +113,9 @@ class SQLSelectSchemaQueryHandler(SQLSchemaQueryHandler):
                 )
 
         return (
-            self.schema_object.table_name
+            str(self.schema_object.table_name)
             + " AS "
-            + self.prefix_map[self.schema_object.api_name]
+            + str(self.prefix_map[str(self.schema_object.api_name)])
             + (f" {' '.join(joins)}" if len(joins) > 0 else "")
         )
 
@@ -152,7 +155,7 @@ class SQLSelectSchemaQueryHandler(SQLSchemaQueryHandler):
                     raise ApplicationException(
                         400,
                         "Bad object association: "
-                        + schema_object.api_name
+                        + str(schema_object.api_name)
                         + " does not have a "
                         + relation
                         + " property",
@@ -202,14 +205,14 @@ class SQLSelectSchemaQueryHandler(SQLSchemaQueryHandler):
             component = (
                 parts[0]
                 if len(parts) > 1
-                else self.prefix_map[self.schema_object.api_name]
+                else self.prefix_map[str(self.schema_object.api_name)]
             )
             object = object_set.get(component, {})
             if not object:
                 object_set[component] = object
             object[property.api_name] = property.convert_to_api_value(value)
 
-        result = object_set[self.prefix_map[self.schema_object.api_name]]
+        result = object_set[self.prefix_map[str(self.schema_object.api_name)]]
         for name, prefix in self.prefix_map.items():
             if name != self.schema_object.api_name and prefix in object_set:
                 result[name] = object_set[prefix]
@@ -239,7 +242,7 @@ class SQLSelectSchemaQueryHandler(SQLSchemaQueryHandler):
             # handle entity prefix
             field_parts = field_name.split(".")
             if len(field_parts) == 1:
-                prefix = self.prefix_map[self.schema_object.api_name]
+                prefix = self.prefix_map[str(self.schema_object.api_name)]
                 property = self.schema_object.properties.get(field_parts[0])
                 if not property:
                     raise ApplicationException(

@@ -18,6 +18,7 @@ from api_foundry_query_engine.utils.app_exception import ApplicationException
 from api_foundry_query_engine.utils.api_model import SchemaObjectProperty
 from api_foundry_query_engine.operation import Operation
 from api_foundry_query_engine.utils.logger import logger
+import copy
 from tests.test_schema_objects_fixtures import (
     invoice_with_datetime_version_stamp,
     genre_schema_with_timestamp,
@@ -41,15 +42,16 @@ class TestSQLHandler:
         assert len(result_map) == 10
         assert result_map.get("i.invoice_id") is not None
 
-    def test_field_selection_with_association(self):
-        load_api(os.path.join(os.getcwd(), "resources/api_spec.yaml"))
+    def test_field_selection_with_association(self, chinook_env):
+        schema_object = get_schema_object("invoice")
+        assert schema_object is not None
         sql_handler = SQLSelectSchemaQueryHandler(
             Operation(
                 entity="invoice",
                 action="read",
                 metadata_params={"properties": ".* customer:.*"},
             ),
-            get_schema_object("invoice"),
+            schema_object,
             "postgres",
         )
 
@@ -170,9 +172,10 @@ class TestSQLHandler:
                 == "Invalid query parameter, property not found. schema object: invoice, property: track_id"  # noqa E501
             )
 
-    def test_search_value_assignment_type_relations(self):
-        load_api(os.path.join(os.getcwd(), "resources/api_spec.yaml"))
+    def test_search_value_assignment_type_relations(self, chinook_env):
         schema_object = get_schema_object("invoice")
+        assert schema_object is not None
+        schema_object = copy.deepcopy(schema_object)
         sql_handler = SQLSelectSchemaQueryHandler(
             Operation(
                 entity="invoice",
@@ -225,9 +228,10 @@ class TestSQLHandler:
         assert placeholders["i_total_1"] == 1250.0
         assert placeholders["i_total_2"] == 1300.0
 
-    def test_search_value_assignment_column_rename(self):
-        load_api(os.path.join(os.getcwd(), "resources/api_spec.yaml"))
+    def test_search_value_assignment_column_rename(self, chinook_env):
         schema_object = get_schema_object("invoice")
+        assert schema_object is not None
+        schema_object = copy.deepcopy(schema_object)
         invoice_date_property = schema_object.properties["invoice_date"]
         sql_handler = SQLSelectSchemaQueryHandler(
             Operation(
@@ -251,9 +255,10 @@ class TestSQLHandler:
         assert isinstance(placeholders["i_invoice_date"], date)
         assert placeholders["i_invoice_date"] == date(2000, 12, 12)
 
-    def test_search_value_assignment_datetime(self):
-        load_api(os.path.join(os.getcwd(), "resources/api_spec.yaml"))
+    def test_search_value_assignment_datetime(self, chinook_env):
         schema_object = get_schema_object("invoice")
+        assert schema_object is not None
+        schema_object = copy.deepcopy(schema_object)
         sql_handler = SQLSelectSchemaQueryHandler(
             Operation(
                 entity="invoice",
@@ -274,9 +279,10 @@ class TestSQLHandler:
             2000, 12, 12, 12, 34, 56, tzinfo=timezone.utc
         )
 
-    def test_search_value_assignment_date(self):
-        load_api(os.path.join(os.getcwd(), "resources/api_spec.yaml"))
+    def test_search_value_assignment_date(self, chinook_env):
         schema_object = get_schema_object("invoice")
+        assert schema_object is not None
+        schema_object = copy.deepcopy(schema_object)
         invoice_date_property = schema_object.properties["invoice_date"]
         invoice_date_property.api_type = "date"
         invoice_date_property.column_type = "date"
@@ -312,9 +318,7 @@ class TestSQLHandler:
         )
 
         property = SchemaObjectProperty(
-            operation_id="invoice",
-            name="is_active",
-            properties={"type": "boolean", "x-af-column-type": "integer"},
+            data={"type": "boolean", "x-af-column-type": "integer"}
         )
 
         (sql, placeholders) = sql_handler.search_value_assignment(property, "true", "i")
@@ -339,8 +343,10 @@ class TestSQLHandler:
         except ApplicationException as e:
             assert e.status_code == 500
 
-    def test_select_single_joined_table(self):
-        load_api(os.path.join(os.getcwd(), "resources/api_spec.yaml"))
+    def test_select_single_joined_table(self, chinook_env):
+        schema_object = get_schema_object("invoice")
+        assert schema_object is not None
+        schema_object = copy.deepcopy(schema_object)
         sql_handler = SQLSelectSchemaQueryHandler(
             Operation(
                 entity="invoice",
@@ -348,7 +354,7 @@ class TestSQLHandler:
                 query_params={"billing_state": "FL"},
                 metadata_params={"properties": ".* customer:.* invoice_line_items:.*"},
             ),
-            get_schema_object("invoice"),
+            schema_object,
             "postgres",
         )
 
@@ -366,8 +372,10 @@ class TestSQLHandler:
         )
         assert sql_handler.placeholders == {"i_billing_state": "FL"}
 
-    def test_select_schema_handling_table(self):
-        load_api(os.path.join(os.getcwd(), "resources/api_spec.yaml"))
+    def test_select_schema_handling_table(self, chinook_env):
+        schema_object = get_schema_object("invoice")
+        assert schema_object is not None
+        schema_object = copy.deepcopy(schema_object)
         sql_handler = SQLSelectSchemaQueryHandler(
             Operation(
                 entity="invoice",
@@ -375,7 +383,7 @@ class TestSQLHandler:
                 query_params={"billing_state": "FL"},
                 metadata_params={"properties": ".* customer:.* invoice_line_items:.*"},
             ),
-            get_schema_object("invoice"),
+            schema_object,
             "postgres",
         )
 
@@ -455,8 +463,10 @@ class TestSQLHandler:
         except ApplicationException as e:
             assert False, e.message
 
-    def test_delete(self):
-        load_api(os.path.join(os.getcwd(), "resources/api_spec.yaml"))
+    def test_delete(self, chinook_env):
+        schema_object = get_schema_object("playlist_track")
+        assert schema_object is not None
+        schema_object = copy.deepcopy(schema_object)
         sql_handler = SQLDeleteSchemaQueryHandler(
             Operation(
                 entity="playlist_track",
@@ -466,7 +476,7 @@ class TestSQLHandler:
                 },
                 metadata_params={"_properties": "track_id"},
             ),
-            get_schema_object("playlist_track"),
+            schema_object,
             "postgres",
         )
 

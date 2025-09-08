@@ -1,3 +1,4 @@
+from typing import Mapping
 import boto3
 import json
 import os
@@ -11,9 +12,11 @@ log = logger(__name__)
 
 class ConnectionFactory:
     db_config_map: dict[str, dict]
+    config: Mapping[str, str]
 
-    def __init__(self):
+    def __init__(self, config: Mapping[str, str] = {}):
         self.db_config_map = dict()
+        self.config = config
 
     def get_connection(self, database: str) -> Connection:
         """
@@ -33,7 +36,11 @@ class ConnectionFactory:
         log.info(f"database: {database}")
         db_config = self.db_config_map.get(database)
         if not db_config:
-            secret_name = json.loads(os.environ.get("SECRETS", "{}")).get(database)
+            # Use config dict for secrets
+            secrets_map = self.config.get("SECRETS", {})
+            if isinstance(secrets_map, str):
+                secrets_map = json.loads(secrets_map)
+            secret_name = secrets_map.get(database)
             log.debug(f"secret_name: {secret_name}")
 
             if secret_name:
@@ -66,15 +73,18 @@ class ConnectionFactory:
         Returns:
         - dict: The database configuration obtained from the secret.
         """
-        endpoint_url = os.environ.get("AWS_ENDPOINT_URL")  # LocalStack endpoint
+        if self.config.get(db_secret_name):
+            return self.config.get(db_secret_name)
+
+        endpoint_url = self.config.get("AWS_ENDPOINT_URL")  # LocalStack endpoint
         sts_client = boto3.client("sts", endpoint_url=endpoint_url)
 
-        secret_account_id = os.environ.get("SECRET_ACCOUNT_ID", None)
+        secret_account_id = self.config.get("SECRET_ACCOUNT_ID", None)
         log.debug(f"secret_account_id: {secret_account_id}")
 
         if secret_account_id:
             # If a secret account ID is provided, assume a role in that account
-            secret_role = os.environ.get("ROLE_NAME", None)
+            secret_role = self.config.get("ROLE_NAME", None)
             assume_role_response = sts_client.assume_role(
                 RoleArn=f"arn:aws:iam::{secret_account_id}:role/{secret_role}",
                 RoleSessionName="AssumeRoleSession",
@@ -94,7 +104,7 @@ class ConnectionFactory:
             log.info(f"endpoint_url: {endpoint_url}")
             secretsmanager = boto3.client(
                 "secretsmanager",
-                #                endpoint_url=endpoint_url,
+                endpoint_url=endpoint_url,
             )
 
         # Get the secret value from AWS Secrets Manager
@@ -104,6 +114,3 @@ class ConnectionFactory:
 
         # Return the parsed JSON secret string
         return json.loads(db_secret.get("SecretString"))
-
-
-connection_factory = ConnectionFactory()
