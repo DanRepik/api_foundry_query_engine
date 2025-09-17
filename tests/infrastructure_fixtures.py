@@ -1,7 +1,6 @@
 import os
 import time
 import json
-import uuid
 import logging
 from typing import Dict, Generator, Optional
 from pathlib import Path
@@ -185,16 +184,11 @@ def exec_sql_file(conn, sql_path: Path):
 
 
 @pytest.fixture(scope="session")
-def postgres_container(
-    request: pytest.FixtureRequest, test_network
-) -> Generator[dict, None, None]:
+def postgres_container() -> Generator[dict, None, None]:
     """
     Starts a PostgreSQL container and yields connection info.
     Uses a random host port mapped to 5432.
     """
-    teardown: bool = _get_bool_option(request, "teardown", default=True)
-    # Use UUID for uniqueness & easier cleanup
-    container_name = f"qe-pg-{uuid.uuid4().hex[:8]}"
     try:
         client = docker.from_env()
         client.ping()
@@ -205,78 +199,69 @@ def postgres_container(
     password = "test_password"
     database = "chinook"
     image = "postgis/postgis:16-3.4"
-    host_name = "postgres"
-    # Let Docker assign a free host port; we’ll resolve it after start
-    # Use None to let Docker assign a random host port
-    host_port = None
 
     container = client.containers.run(
         image,
-        name=container_name,
-        hostname=host_name,
+        name=f"query-engine-test-{int(time.time())}",
         environment={
             "POSTGRES_USER": user,
             "POSTGRES_PASSWORD": password,
             "POSTGRES_DB": database,
         },
-        ports={"5432/tcp": host_port},  # bind to all interfaces; pick free host port
-        network=test_network,
+        ports={"5432/tcp": 0},  # random host port
         detach=True,
     )
 
     try:
-        # Resolve mapped host port with retries
+        # Resolve mapped port
+        host = "127.0.0.1"
         host_port = None
-        for _ in range(20):
+        deadline = time.time() + 60
+        while time.time() < deadline:
             container.reload()
-            try:
-                port_info = container.attrs["NetworkSettings"]["Ports"]["5432/tcp"]
-                if port_info and port_info[0] and port_info[0].get("HostPort"):
-                    host_port = int(port_info[0]["HostPort"])
-                    break
-            except Exception:
-                pass
-            time.sleep(0.5)
-        assert host_port, "Failed to discover mapped Postgres host port"
+            ports = container.attrs.get("NetworkSettings", {}).get("Ports", {})
+            mapping = ports.get("5432/tcp")
+            if mapping and mapping[0].get("HostPort"):
+                host_port = int(mapping[0]["HostPort"])
+                break
+            time.sleep(0.25)
 
-        # Wait for readiness from the HOST perspective (127.0.0.1:<host_port>)
-        deadline = time.time() + 90
+        if not host_port:
+            raise RuntimeError("Failed to map Postgres port")
+
+        # Wait for readiness
+        deadline = time.time() + 60
         while time.time() < deadline:
             try:
                 conn = psycopg2.connect(
                     dbname=database,
                     user=user,
                     password=password,
-                    host="127.0.0.1",
+                    host=host,
                     port=host_port,
                 )
                 conn.close()
                 break
             except Exception:
                 time.sleep(0.5)
-        else:
-            raise RuntimeError("Postgres did not become ready in time")
 
         yield {
-            # For Lambda/containers on the same Docker network:
-            "host": host_name,
-            "port": 5432,
+            "host": host,
+            "port": host_port,
             "user": user,
             "password": password,
             "database": database,
-            # For host/macOS access:
-            "dsn": f"postgresql://{user}:{password}@127.0.0.1:{host_port}/{database}",
+            "dsn": f"postgresql://{user}:{password}@{host}:{host_port}/{database}",
         }
     finally:
-        if teardown:
-            try:
-                container.stop(timeout=5)
-            except Exception:
-                pass
-            try:
-                container.remove(v=True, force=True)
-            except Exception:
-                pass
+        try:
+            container.stop(timeout=5)
+        except Exception:
+            pass
+        try:
+            container.remove(v=True, force=True)
+        except Exception:
+            pass
 
 
 def _wait_for_localstack(endpoint: str, timeout: int = 90) -> None:

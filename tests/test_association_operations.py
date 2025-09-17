@@ -13,7 +13,6 @@ log = logger(__name__)
 @pytest.mark.integration
 class TestAssociationOperations:
     def test_object_property(self, chinook_env):  # noqa F811
-        load_api()
         result = TransactionalService(chinook_env).execute(
             Operation(
                 entity="invoice",
