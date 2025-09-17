@@ -1,12 +1,10 @@
 import hashlib
 import json
-import os
 
 from api_foundry_query_engine.utils.logger import logger
 from api_foundry_query_engine.operation import Operation
 
 log = logger(__name__)
-
 
 
 class Service:
@@ -17,14 +15,12 @@ class Service:
         raise NotImplementedError
 
 
-
 class ServiceAdapter(Service):
     def __init__(self, config: dict = {}):
         super().__init__(config)
 
     def execute(self, operation: Operation) -> list[dict]:
         return super().execute(operation)
-
 
 
 class MutationPublisher(ServiceAdapter):
@@ -65,6 +61,7 @@ class MutationPublisher(ServiceAdapter):
 
     def __client(self, client_type):
         import boto3
+
         region = self.config.get("AWS_REGION", "us-east-1")
         session = boto3.Session()
         if session:

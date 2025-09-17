@@ -1,7 +1,6 @@
 from typing import Mapping
 import boto3
 import json
-import os
 
 from api_foundry_query_engine.connectors.connection import Connection
 from api_foundry_query_engine.utils.app_exception import ApplicationException

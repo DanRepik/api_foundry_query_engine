@@ -73,10 +73,15 @@ class SQLInsertSchemaQueryHandler(SQLSchemaQueryHandler):
         allowed_property_names = self.check_permissions(
             "write", self.schema_object.permissions, self.schema_object.properties
         )
-        allowed_properties = {k: v for k, v in self.schema_object.properties.items() if k in allowed_property_names}
+        allowed_properties = {
+            k: v
+            for k, v in self.schema_object.properties.items()
+            if k in allowed_property_names
+        }
         log.info(f"allowed properties: {allowed_properties}")
 
         import json
+
         for name, value in self.operation.store_params.items():
             parts = name.split(".")
 
@@ -98,13 +103,17 @@ class SQLInsertSchemaQueryHandler(SQLSchemaQueryHandler):
 
             columns.append(property.column_name)
             if property.api_name is None:
-                raise ApplicationException(400, f"Property '{name}' does not have a valid api_name.")
+                raise ApplicationException(
+                    400, f"Property '{name}' does not have a valid api_name."
+                )
             placeholders.append(self.placeholder(property, property.api_name))
             # Serialize embedded objects to JSON
             if property.api_type == "object":
                 self.store_placeholders[property.api_name] = json.dumps(value)
             else:
-                self.store_placeholders[property.api_name] = property.convert_to_db_value(value)
+                self.store_placeholders[
+                    property.api_name
+                ] = property.convert_to_db_value(value)
 
         if self.key_property:
             if self.key_property.key_type == "sequence":

@@ -5,7 +5,10 @@ pulumi_aws
 
 pytest
 pytest-cov
+pre-commit
 docker
 boto3
 PyYAML
 requests
+
+-e ../cloud_foundry

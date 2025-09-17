@@ -1,6 +1,4 @@
-
 import json
-import yaml
 import pytest
 import psycopg2
 
@@ -11,12 +9,14 @@ import pulumi.automation as auto
 
 from api_foundry_query_engine.utils.api_model import set_api_model
 
-from .postgres_fixtures import _exec_sql_file, postgres_container, postgres_container_no_teardown
-from .localstack_fixture import localstack
-from .automation_helpers import deploy_stack, deploy_stack_no_teardown
+from .postgres_fixtures import _exec_sql_file
+from .postgres_fixtures import postgres_container  # noqa: F401
+from .localstack_fixture import localstack  # noqa: F401
+from .automation_helpers import deploy_stack  # noqa: F401
+
 
 @pytest.fixture(scope="session")
-def chinook_db(postgres_container):
+def chinook_db(postgres_container):  # noqa: F811
     # Locate DDL files (project root is one parent up from this test file: backend/tests/ -> farm_market/)
     project_root = Path(__file__).resolve().parents[1]
     chinook_sql = project_root / "tests" / "Chinook_Postgres.sql"
@@ -34,6 +34,7 @@ def chinook_db(postgres_container):
     finally:
         conn.close()
 
+
 @pytest.fixture(scope="session")
 def chinook_api():
     # Load API specification from YAML file
@@ -42,13 +43,9 @@ def chinook_api():
     yield api_spec_path.read_text()
 
 
-
 @pytest.fixture(scope="session")
 def chinook_env(chinook_db, chinook_api):
-
-    secrets = {
-        "chinook": "chinook_secret"
-    }
+    secrets = {"chinook": "chinook_secret"}
 
     env = {
         "API_SPEC": chinook_api,
@@ -61,12 +58,13 @@ def chinook_env(chinook_db, chinook_api):
             "password": chinook_db["password"],
             "database": chinook_db["database"],
             "dsn": chinook_db["dsn"],
-        }
+        },
     }
 
     set_api_model(env)
 
     yield env
+
 
 @pytest.fixture
 def chinook_api_model(chinook_env):
@@ -75,7 +73,7 @@ def chinook_api_model(chinook_env):
 
 
 @pytest.fixture(scope="session")
-def market_stack(localstack, chinook_model):
+def market_stack(localstack, chinook_model):  # noqa: F811
     def pulumi_program():
         # Extract connection info from chinook_model
         conn_info = {
@@ -89,7 +87,7 @@ def market_stack(localstack, chinook_model):
         }
 
         secret = aws.secretsmanager.Secret("test-secret", name="test/secret")
-        secret_value = aws.secretsmanager.SecretVersion(
+        aws.secretsmanager.SecretVersion(
             "test-secret-value",
             secret_id=secret.id,
             secret_string=json.dumps(conn_info),
@@ -102,10 +100,16 @@ def market_stack(localstack, chinook_model):
         "aws:accessKey": auto.ConfigValue("test"),
         "aws:secretKey": auto.ConfigValue("test"),
         # Point AWS services used by the provider to LocalStack and relax validations
-        "aws:endpoints": auto.ConfigValue(json.dumps([{
-            "secretsmanager": localstack["endpoint_url"],
-            "sts": localstack["endpoint_url"],
-        }])),
+        "aws:endpoints": auto.ConfigValue(
+            json.dumps(
+                [
+                    {
+                        "secretsmanager": localstack["endpoint_url"],
+                        "sts": localstack["endpoint_url"],
+                    }
+                ]
+            )
+        ),
         "aws:skipCredentialsValidation": auto.ConfigValue("true"),
         "aws:skipRegionValidation": auto.ConfigValue("true"),
         "aws:skipRequestingAccountId": auto.ConfigValue("true"),
@@ -115,8 +119,10 @@ def market_stack(localstack, chinook_model):
         # Useful if S3 is ever used in tests with LocalStack
         "aws:s3UsePathStyle": auto.ConfigValue("true"),
     }
-    
-    stack = auto.create_or_select_stack(stack_name=stack_name, project_name=project_name, program=pulumi_program)
+
+    stack = auto.create_or_select_stack(
+        stack_name=stack_name, project_name=project_name, program=pulumi_program
+    )
     try:
         # Clean any prior state-backed resources so LocalStack restarts don't leave stale ARNs
         try:

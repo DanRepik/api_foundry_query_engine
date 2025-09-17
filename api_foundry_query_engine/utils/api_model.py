@@ -4,12 +4,12 @@ import yaml
 from datetime import datetime
 from typing import Any, Dict, Mapping, Optional
 
-from api_foundry_query_engine.operation import Operation
 from api_foundry_query_engine.utils.logger import logger
 
 log = logger(__name__)
 
 api_model = None
+
 
 def get_schema_object(name: str) -> Optional["SchemaObject"]:
     global api_model
@@ -17,11 +17,13 @@ def get_schema_object(name: str) -> Optional["SchemaObject"]:
         return None
     return api_model.schema_objects.get(name)
 
+
 def get_path_operation(path: str, method: str) -> Optional["PathOperation"]:
     global api_model
     if api_model is None:
         return None
     return api_model.path_operations.get(f"{path}_{method}")
+
 
 class SchemaObjectProperty:
     """Represents a property of a schema object."""
@@ -57,7 +59,9 @@ class SchemaObjectProperty:
             "date-time": lambda x: datetime.fromisoformat(x) if x else None,
             "time": lambda x: datetime.strptime(x, "%H:%M:%S").time() if x else None,
         }
-        conversion_func = conversion_mapping.get(self.column_type if self.column_type is not None else "string", lambda x: x)
+        conversion_func = conversion_mapping.get(
+            self.column_type if self.column_type is not None else "string", lambda x: x
+        )
         return conversion_func(value)
 
     def convert_to_api_value(self, value) -> Optional[Any]:
@@ -73,7 +77,9 @@ class SchemaObjectProperty:
             "date-time": lambda x: x.isoformat() if x else None,
             "time": lambda x: x.time().isoformat() if x else None,
         }
-        conversion_func = conversion_mapping.get(self.api_type if self.api_type is not None else "string", lambda x: x)
+        conversion_func = conversion_mapping.get(
+            self.api_type if self.api_type is not None else "string", lambda x: x
+        )
         return conversion_func(value)
 
 
@@ -101,7 +107,9 @@ class SchemaObjectAssociation:
             raise ValueError(f"Primary key not defined for schema '{self.schema_name}'")
         column_name = getattr(child_schema.primary_key, "column_name", None)
         if column_name is None:
-            raise ValueError(f"Primary key property does not have 'column_name' for schema '{self.schema_name}'")
+            raise ValueError(
+                f"Primary key property does not have 'column_name' for schema '{self.schema_name}'"
+            )
         return column_name
 
     @property
@@ -112,10 +120,14 @@ class SchemaObjectAssociation:
         if not parent_schema_obj:
             raise ValueError(f"SchemaObject '{self.parent_schema}' not found")
         if not parent_schema_obj.primary_key:
-            raise ValueError(f"Primary key not defined for schema '{self.parent_schema}'")
+            raise ValueError(
+                f"Primary key not defined for schema '{self.parent_schema}'"
+            )
         column_name = getattr(parent_schema_obj.primary_key, "column_name", None)
         if column_name is None:
-            raise ValueError(f"Primary key property does not have 'column_name' for schema '{self.parent_schema}'")
+            raise ValueError(
+                f"Primary key property does not have 'column_name' for schema '{self.parent_schema}'"
+            )
         return column_name
 
     def __repr__(self):
@@ -147,7 +159,9 @@ class SchemaObject:
             for name, prop_data in data.get("properties", {}).items()
         }
         self.relations = {
-            name: SchemaObjectAssociation(self.api_name if self.api_name is not None else "", assoc_data)
+            name: SchemaObjectAssociation(
+                self.api_name if self.api_name is not None else "", assoc_data
+            )
             for name, assoc_data in data.get("relations", {}).items()
         }
         self.concurrency_property = (
@@ -208,12 +222,12 @@ class APIModel:
             return None
         return self.path_operations.get(f"{path}_{method}")
 
-
     def __repr__(self):
         return (
             f"APIModel(schema_objects={list(self.schema_objects.keys())}, "
             + f"path_operations={list(self.path_operations.keys())})"
         )
+
 
 def set_api_model(engine_config: Mapping[str, str]):
     global api_model
@@ -221,5 +235,7 @@ def set_api_model(engine_config: Mapping[str, str]):
         if engine_config.get("API_SPEC"):
             api_model = APIModel(yaml.safe_load(engine_config["API_SPEC"]))
         else:
-            with open(os.environ.get("API_SPEC", "/var/task/api_spec.yaml"), "r") as file:
+            with open(
+                os.environ.get("API_SPEC", "/var/task/api_spec.yaml"), "r"
+            ) as file:
                 api_model = APIModel(yaml.safe_load(file))

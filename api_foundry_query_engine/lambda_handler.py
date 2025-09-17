@@ -1,21 +1,18 @@
-from fileinput import filename
 import json
 import logging
 import os
 from typing import Optional, Mapping
-import yaml
 
 from api_foundry_query_engine.utils.app_exception import ApplicationException
 from api_foundry_query_engine.adapters.gateway_adapter import GatewayAdapter
-from api_foundry_query_engine.utils.api_model import APIModel
 
 log = logging.getLogger(__name__)
 
 engine_config: Optional[Mapping[str, str]] = None
 adapter: Optional[GatewayAdapter] = None
 
-class QueryEngine:
 
+class QueryEngine:
     def __init__(self, config: Mapping[str, str]):
         self.adapter = GatewayAdapter(config)
 

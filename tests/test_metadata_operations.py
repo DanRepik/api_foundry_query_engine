@@ -35,7 +35,7 @@ class TestMetadataOperations:
         assert result[0]["first_name"] == "Aaron"
         assert result[0]["last_name"] == "Mitchell"
 
-    def test_order_invalid_1(self,chinook_env):  # noqa F811
+    def test_order_invalid_1(self, chinook_env):  # noqa F811
         try:
             TransactionalService(chinook_env).execute(
                 Operation(
@@ -52,7 +52,7 @@ class TestMetadataOperations:
                 == "Invalid order by property, schema object: customer does not have a property: x-phone"  # noqa E501
             )
 
-    def test_order_invalid_2(self,chinook_env):  # noqa F811
+    def test_order_invalid_2(self, chinook_env):  # noqa F811
         try:
             TransactionalService(chinook_env).execute(
                 Operation(
@@ -69,7 +69,7 @@ class TestMetadataOperations:
                 == "Invalid order by property, schema object: invoice does not have a property: customerx"  # noqa E501
             )
 
-    def test_order_invalid_3(self,chinook_env):  # noqa F811
+    def test_order_invalid_3(self, chinook_env):  # noqa F811
         try:
             TransactionalService(chinook_env).execute(
                 Operation(

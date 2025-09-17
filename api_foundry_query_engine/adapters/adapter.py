@@ -10,7 +10,6 @@ log = logger(__name__)
 
 
 class Adapter(metaclass=abc.ABCMeta):
-
     service: Service
     config: Mapping[str, str]
 
@@ -23,9 +22,13 @@ class Adapter(metaclass=abc.ABCMeta):
             and callable(__subclass.unmarshal)
         )
 
-    def __init__(self, config: Mapping[str, str] = {}, service: Optional[Service] = None) -> None:
+    def __init__(
+        self, config: Mapping[str, str] = {}, service: Optional[Service] = None
+    ) -> None:
         self.config = config
-        self.service = service if service is not None else TransactionalService(config=self.config)
+        self.service = (
+            service if service is not None else TransactionalService(config=self.config)
+        )
 
     def unmarshal(self, event) -> Operation:
         """

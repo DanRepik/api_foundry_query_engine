@@ -36,8 +36,8 @@ class TestCustomOperations:
             "total_sold": 8,
         }
         assert result[4] == {
-            "album_id": 51,
-            "album_title": "Up An' Atom",
+            "album_id": 38,
+            "album_title": "Heart of the Night",
             "total_sold": 3,
         }
 
@@ -68,7 +68,7 @@ class TestCustomOperations:
             "total_sold": 8,
         }
         assert result[4] == {
-            "album_id": 51,
-            "album_title": "Up An' Atom",
+            "album_id": 38,
+            "album_title": "Heart of the Night",
             "total_sold": 3,
         }

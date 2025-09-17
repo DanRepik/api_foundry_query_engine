@@ -1,5 +1,3 @@
-from yaml import safe_load
-
 from api_foundry_query_engine.operation import Operation
 from api_foundry_query_engine.dao.operation_dao import OperationDAO
 from api_foundry_query_engine.utils.api_model import get_schema_object
@@ -292,8 +290,10 @@ def test_read_relation_some_restrictions(chinook_env):
     log.info(f"sql: {sql_handler.sql}")
     assert (
         sql_handler.sql
-        == "SELECT i.invoice_date, i.invoice_id, i.total, inv.track_id, inv.unit_price FROM invoice AS i "
-        + "INNER JOIN invoice_line AS inv ON i.invoice_id = inv.invoice_id WHERE i.invoice_id = %(i_invoice_id)s"
+        == "SELECT i.billing_address, i.billing_city, i.billing_country, "
+        + "i.billing_postal_code, i.billing_state, i.customer_id, "
+        + "i.invoice_date, i.invoice_id, i.last_updated, i.total "
+        + "FROM invoice AS i WHERE i.invoice_id = %(i_invoice_id)s"
     )
 
 

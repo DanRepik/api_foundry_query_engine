@@ -25,7 +25,7 @@ import pytest
 try:
     import docker  # type: ignore
     from docker.errors import DockerException  # type: ignore
-except Exception as e:  # pragma: no cover - handled in fixture with skip
+except Exception:  # pragma: no cover - handled in fixture with skip
     docker = None  # type: ignore
     DockerException = Exception  # type: ignore
 
@@ -33,7 +33,9 @@ import requests
 
 
 os.environ["PULUMI_BACKEND_URL"] = "file://~"
-DEFAULT_REGION = os.environ.get("AWS_REGION", os.environ.get("AWS_DEFAULT_REGION", "us-east-1"))
+DEFAULT_REGION = os.environ.get(
+    "AWS_REGION", os.environ.get("AWS_DEFAULT_REGION", "us-east-1")
+)
 
 
 def _wait_for_localstack(endpoint: str, timeout: int = 90) -> None:
@@ -68,7 +70,9 @@ def _wait_for_localstack(endpoint: str, timeout: int = 90) -> None:
                 time.sleep(0.5)
                 continue
         time.sleep(0.5)
-    raise RuntimeError(f"Timed out waiting for LocalStack at {endpoint} (last_err={last_err})")
+    raise RuntimeError(
+        f"Timed out waiting for LocalStack at {endpoint} (last_err={last_err})"
+    )
 
 
 @pytest.fixture(scope="session")
@@ -142,7 +146,9 @@ def localstack(request: pytest.FixtureRequest) -> Generator[Dict[str, str], None
             try:
                 container.stop(timeout=5)
             finally:
-                raise RuntimeError("Failed to determine LocalStack edge port after retries")
+                raise RuntimeError(
+                    "Failed to determine LocalStack edge port after retries"
+                )
     else:
         host_port = port
 
@@ -151,8 +157,12 @@ def localstack(request: pytest.FixtureRequest) -> Generator[Dict[str, str], None
     # Set common AWS envs for child code that relies on defaults
     os.environ.setdefault("AWS_REGION", DEFAULT_REGION)
     os.environ.setdefault("AWS_DEFAULT_REGION", DEFAULT_REGION)
-    os.environ.setdefault("AWS_ACCESS_KEY_ID", os.environ.get("AWS_ACCESS_KEY_ID", "test"))
-    os.environ.setdefault("AWS_SECRET_ACCESS_KEY", os.environ.get("AWS_SECRET_ACCESS_KEY", "test"))
+    os.environ.setdefault(
+        "AWS_ACCESS_KEY_ID", os.environ.get("AWS_ACCESS_KEY_ID", "test")
+    )
+    os.environ.setdefault(
+        "AWS_SECRET_ACCESS_KEY", os.environ.get("AWS_SECRET_ACCESS_KEY", "test")
+    )
 
     # Wait for the health endpoint to be ready
     _wait_for_localstack(endpoint, timeout=timeout)

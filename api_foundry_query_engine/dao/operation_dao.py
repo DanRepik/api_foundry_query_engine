@@ -20,7 +20,10 @@ from api_foundry_query_engine.utils.app_exception import ApplicationException
 from api_foundry_query_engine.dao.dao import DAO
 from api_foundry_query_engine.connectors.connection import Cursor
 from api_foundry_query_engine.operation import Operation
-from api_foundry_query_engine.utils.api_model import get_path_operation, get_schema_object
+from api_foundry_query_engine.utils.api_model import (
+    get_path_operation,
+    get_schema_object,
+)
 from api_foundry_query_engine.dao.sql_query_handler import SQLQueryHandler
 
 
@@ -83,9 +86,7 @@ class OperationDAO(DAO):
                 )
         return self._query_handler
 
-    def execute(
-        self, connector, operation=None
-    ) -> Union[list[dict], dict]:
+    def execute(self, connector, operation=None) -> Union[list[dict], dict]:
         """
         Execute the database operation based on the provided connector.
 

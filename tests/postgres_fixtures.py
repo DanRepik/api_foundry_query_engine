@@ -6,11 +6,13 @@ import docker
 import psycopg2
 import pytest
 
+
 def _exec_sql_file(conn, sql_path: Path):
     sql_text = sql_path.read_text(encoding="utf-8")
     # Execute entire script (supports DO $$ ... $$ blocks and multiple statements)
     with conn.cursor() as cur:
         cur.execute(sql_text)
+
 
 @pytest.fixture(scope="session")
 def postgres_container() -> Generator[dict, None, None]:
@@ -63,7 +65,11 @@ def postgres_container() -> Generator[dict, None, None]:
         while time.time() < deadline:
             try:
                 conn = psycopg2.connect(
-                    dbname=database, user=user, password=password, host=host, port=host_port
+                    dbname=database,
+                    user=user,
+                    password=password,
+                    host=host,
+                    port=host_port,
                 )
                 conn.close()
                 break
@@ -87,6 +93,7 @@ def postgres_container() -> Generator[dict, None, None]:
             container.remove(v=True, force=True)
         except Exception:
             pass
+
 
 @pytest.fixture(scope="session")
 def postgres_container_no_teardown() -> Generator[dict, None, None]:

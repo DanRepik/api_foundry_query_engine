@@ -1,5 +1,5 @@
 import traceback
-from typing import Optional, Mapping
+from typing import Mapping
 
 from api_foundry_query_engine.utils.logger import logger
 from api_foundry_query_engine.utils.app_exception import ApplicationException
@@ -19,7 +19,7 @@ class TransactionalService(ServiceAdapter):
     def __init__(self, config: Mapping[str, str]):
         super().__init__()
         self.config = config
-        self.connection_factory = ConnectionFactory(config) 
+        self.connection_factory = ConnectionFactory(config)
 
     def execute(self, operation: Operation) -> list[dict]:
         path_operation = get_path_operation(operation.entity, operation.action)

@@ -70,7 +70,7 @@ class SQLSelectSchemaQueryHandler(SQLSchemaQueryHandler):
                     if self.schema_object.api_name is None:
                         raise ApplicationException(
                             500,
-                            "schema_object.api_name is None, cannot use as key in prefix_map"
+                            "schema_object.api_name is None, cannot use as key in prefix_map",
                         )
                     prefix = self.prefix_map[self.schema_object.api_name]
             except KeyError:
@@ -80,7 +80,7 @@ class SQLSelectSchemaQueryHandler(SQLSchemaQueryHandler):
                     + "schema object: "
                     + str(self.schema_object.api_name)
                     + ", property: "
-                    + name
+                    + name,
                 )
 
             assignment, holders = self.search_value_assignment(property, value, prefix)

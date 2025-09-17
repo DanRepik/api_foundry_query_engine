@@ -3,17 +3,15 @@ import json
 
 from api_foundry_query_engine.utils.logger import logger
 
-from tests.test_fixtures import db_secrets  # noqa F401
-
 log = logger(__name__)
 
 
-def test_handler(db_secrets):  # noqa F811
+def test_handler(chinook_env):  # noqa F811
     log.info(f"cwd {os.path.join(os.getcwd(), 'resources/api_spec.yaml')}")
 
     os.environ["API_SPEC"] = os.path.join(os.getcwd(), "resources/api_spec.yaml")
 
-    from api_foundry_query_engine.lambda_handler import handler
+    import api_foundry_query_engine.lambda_handler as lambda_handler
 
     event = {
         "path": "/album",
@@ -30,11 +28,11 @@ def test_handler(db_secrets):  # noqa F811
         "queryStringParameters": None,
         "multiValueQueryStringParameters": None,
         "pathParameters": {},
-        "resource": "/album",
+        "resource": "/artist",
         "requestContext": {
             "accountId": "000000000000",
             "apiId": "local",
-            "resourcePath": "/album",
+            "resourcePath": "/artist",
             "domainPrefix": "localhost",
             "domainName": "localhost",
             "resourceId": "resource-id",
@@ -56,8 +54,10 @@ def test_handler(db_secrets):  # noqa F811
     }
 
     print(f"current dir: {os.getcwd()}")
+
     #    ModelFactory.load_yaml(api_spec_path="resources/chinook_api.yaml")
-    response = handler(event, None)
+    lambda_handler.engine_config = chinook_env
+    response = lambda_handler.handler(event, None)
     assert response["statusCode"] == 200
-    albums = json.loads(response["body"])
-    assert len(albums) == 350
+    artist = json.loads(response["body"])
+    assert len(artist) == 275

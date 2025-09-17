@@ -1,6 +1,5 @@
 from datetime import datetime
 import json
-import pytest
 
 from api_foundry_query_engine.utils.app_exception import ApplicationException
 from api_foundry_query_engine.utils.logger import logger
@@ -8,6 +7,7 @@ from api_foundry_query_engine.operation import Operation
 from api_foundry_query_engine.services.transactional_service import TransactionalService
 
 log = logger(__name__)
+
 
 class TestTransactionalService:
     def test_crud_service(self, chinook_env):  # noqa F811
