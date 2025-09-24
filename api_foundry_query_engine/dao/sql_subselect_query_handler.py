@@ -53,7 +53,7 @@ class SQLSubselectSchemaQueryHandler(SQLSelectSchemaQueryHandler):
 
         sql = (
             f"SELECT {self.select_list} "
-            + f"FROM {self.relation.child_schema_object.table_name} "
+            + f"FROM {self.relation.child_schema_object.quailified_name} "
             + f"WHERE {self.relation.child_property} "
             + f"IN ( SELECT {self.relation.parent_property} "
             + f"FROM {self.parent_generator.table_expression}"

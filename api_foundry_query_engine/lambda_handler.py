@@ -3,13 +3,11 @@ import logging
 import os
 from typing import Optional, Mapping
 
+from api_foundry_query_engine.utils.api_model import set_api_model
 from api_foundry_query_engine.utils.app_exception import ApplicationException
 from api_foundry_query_engine.adapters.gateway_adapter import GatewayAdapter
 
 log = logging.getLogger(__name__)
-
-engine_config: Optional[Mapping[str, str]] = None
-adapter: Optional[GatewayAdapter] = None
 
 
 class QueryEngine:
@@ -46,10 +44,21 @@ class QueryEngine:
             }
 
 
-def handler(event, _):
-    global engine_config, adapter
-    if engine_config is None:
-        engine_config = os.environ
+engine_config: Optional[Mapping[str, str]] = None
+query_engine: Optional[QueryEngine] = None
 
-    query_engine = QueryEngine(engine_config)
+
+def handler(event, _):
+    global engine_config, query_engine
+    log.info(f"engine_config: {engine_config}")
+    if engine_config is None:
+        log.info("Loading engine config from environment variables")
+        engine_config = os.environ
+        log.info(f"engine_config: {engine_config}")
+
+    if query_engine is None:
+        set_api_model(engine_config)
+        log.info("Creating QueryEngine instance")
+        query_engine = QueryEngine(engine_config)
+
     return query_engine.handler(event)

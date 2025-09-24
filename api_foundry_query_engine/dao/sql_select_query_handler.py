@@ -99,7 +99,7 @@ class SQLSelectSchemaQueryHandler(SQLSchemaQueryHandler):
             if child_prefix in self.active_prefixes:
                 joins.append(
                     "INNER JOIN "
-                    + str(relation.child_schema_object.table_name)
+                    + str(relation.child_schema_object.quailified_name)
                     + " AS "
                     + child_prefix
                     + " ON "
@@ -113,7 +113,7 @@ class SQLSelectSchemaQueryHandler(SQLSchemaQueryHandler):
                 )
 
         return (
-            str(self.schema_object.table_name)
+            str(self.schema_object.quailified_name)
             + " AS "
             + str(self.prefix_map[str(self.schema_object.api_name)])
             + (f" {' '.join(joins)}" if len(joins) > 0 else "")

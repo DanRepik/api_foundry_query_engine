@@ -171,9 +171,12 @@ class SchemaObject:
         )
         self._primary_key: str = str(data.get("primary_key"))
         self.permissions = data.get("permissions")
+        self.quailified_name = (
+            f"{self.database}.{self.table_name}" if self.database else self.table_name
+        )
 
     def __repr__(self):
-        return f"SchemaObject(table_name={self.table_name}, primary_key={self.primary_key})"
+        return f"SchemaObject(table_name={self.quailified_name}, primary_key={self.primary_key})"
 
     @property
     def primary_key(self):
@@ -235,7 +238,9 @@ def set_api_model(engine_config: Mapping[str, str]):
         if engine_config.get("API_SPEC"):
             api_model = APIModel(yaml.safe_load(engine_config["API_SPEC"]))
         else:
+            log.info("Loading API model from file")
             with open(
                 os.environ.get("API_SPEC", "/var/task/api_spec.yaml"), "r"
             ) as file:
                 api_model = APIModel(yaml.safe_load(file))
+        log.info(f"Loaded API model: {api_model}")
