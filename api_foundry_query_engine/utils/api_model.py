@@ -153,7 +153,11 @@ class SchemaObject:
     def __init__(self, data: Dict[str, Any]):
         self.api_name: str = str(data.get("api_name"))
         self.database: str = str(data.get("database"))
+        self.schema: Optional[str] = data.get("schema")
         self.table_name: str = str(data.get("table_name"))
+        self.qualified_name: str = (
+            f"{self.schema}.{self.table_name}" if self.schema else self.table_name
+        )
         self.properties: Dict[str, SchemaObjectProperty] = {
             name: SchemaObjectProperty(prop_data)
             for name, prop_data in data.get("properties", {}).items()
@@ -171,12 +175,9 @@ class SchemaObject:
         )
         self._primary_key: str = str(data.get("primary_key"))
         self.permissions = data.get("permissions")
-        self.quailified_name = (
-            f"{self.database}.{self.table_name}" if self.database else self.table_name
-        )
 
     def __repr__(self):
-        return f"SchemaObject(table_name={self.quailified_name}, primary_key={self.primary_key})"
+        return f"SchemaObject(table_name={self.table_name}, primary_key={self.primary_key})"
 
     @property
     def primary_key(self):

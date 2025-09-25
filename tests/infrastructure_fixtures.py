@@ -2,11 +2,11 @@ import os
 import time
 import json
 import logging
+from contextlib import contextmanager
 from typing import Dict, Generator, Optional
 from pathlib import Path
 
 import docker
-import psycopg2
 import pytest
 import requests
 from pulumi import automation as auto  # Pulumi Automation API
@@ -15,114 +15,77 @@ from docker.errors import DockerException
 from docker.types import Mount
 
 log = logging.getLogger(__name__)
-os.environ["PULUMI_BACKEND_URL"] = "file://~"
 DEFAULT_REGION = os.environ.get(
     "AWS_REGION", os.environ.get("AWS_DEFAULT_REGION", "us-east-1")
 )
 
 
-def deploy_stack(project_name, stack_name, pulumi_program):
-    stack = auto.create_or_select_stack(
-        stack_name=stack_name,
-        project_name=project_name,
-        program=pulumi_program,
-    )
-    try:
-        print("Deploying Pulumi stack...")
-        up_result = stack.up()
-        print(f"Deployment complete: {up_result.summary.resource_changes}")
-        outputs = {k: v.value for k, v in up_result.outputs.items()}
-        return stack, outputs
-    finally:
-        # Optional: let the caller/fixture control teardown instead of destroying here
-        pass
-
-
-def deploy_localstack(
-    project_name, stack_name, localstack, pulumi_program, teardown=True
-):
-    aws_config = {
-        "aws:region": auto.ConfigValue(localstack["region"]),
-        "aws:accessKey": auto.ConfigValue("test"),
-        "aws:secretKey": auto.ConfigValue("test"),
-        "aws:endpoints": auto.ConfigValue(
-            json.dumps(
-                [
-                    {
-                        "cloudwatch": localstack["endpoint_url"],
-                        "apigateway": localstack["endpoint_url"],
-                        "logs": localstack["endpoint_url"],
-                        "iam": localstack["endpoint_url"],
-                        "lambda": localstack["endpoint_url"],
-                        "secretsmanager": localstack["endpoint_url"],
-                        "sts": localstack["endpoint_url"],
-                    }
-                ]
-            )
-        ),
-        "aws:skipCredentialsValidation": auto.ConfigValue("true"),
-        "aws:skipRegionValidation": auto.ConfigValue("true"),
-        "aws:skipRequestingAccountId": auto.ConfigValue("true"),
-        "aws:skipMetadataApiCheck": auto.ConfigValue("true"),
-        "aws:insecure": auto.ConfigValue("true"),
-        "aws:s3UsePathStyle": auto.ConfigValue("true"),
-    }
-
+@contextmanager
+def deploy(
+    project_name: str,
+    stack_name: str,
+    pulumi_program,
+    config: Dict[str, auto.ConfigValue] | None = None,
+    localstack: dict | None = None,
+    teardown: bool = True,
+) -> Generator[Dict[str, str], None, None]:
+    """
+    Deploy a Pulumi program optionally targeting LocalStack and yield ONLY the
+    stack outputs (plain dict). Cleans up on exit if teardown=True.
+    """
     stack = auto.create_or_select_stack(
         stack_name=stack_name, project_name=project_name, program=pulumi_program
     )
 
-    # Clean prior resources (ignore errors)
     try:
-        stack.destroy(on_output=lambda _: None)
-    except Exception:
-        pass
+        # Best effort pre-clean
+        try:
+            stack.destroy(on_output=lambda _: None)
+        except Exception:
+            pass
 
-    stack.set_all_config(aws_config)
-    try:
-        stack.refresh(on_output=lambda _: None)
-    except Exception:
-        pass
-
-    up_result = stack.up(on_output=print)
-
-    # Normalize outputs to plain dict
-    outputs = {k: v.value for k, v in up_result.outputs.items()}
-    return stack, outputs, teardown
-
-
-@pytest.fixture(scope="session")
-def aws_config(
-    request: pytest.FixtureRequest, localstack
-) -> Generator[Dict[str, auto.ConfigValue], None, None]:
-    use_localstack: bool = (
-        request.config.getoption("--use_localstack").lower() == "true"
-    )
-    config = (
-        [
-            {
-                service: localstack["endpoint_url"]
-                for service in localstack["services"].split(",")
+        if config is None and localstack:
+            services_map = [
+                {
+                    svc: localstack["endpoint_url"]
+                    for svc in localstack["services"].split(",")
+                }
+            ]
+            config = {
+                "aws:region": auto.ConfigValue(localstack["region"]),
+                "aws:accessKey": auto.ConfigValue("test"),
+                "aws:secretKey": auto.ConfigValue("test"),
+                "aws:endpoints": auto.ConfigValue(json.dumps(services_map)),
+                "aws:skipCredentialsValidation": auto.ConfigValue("true"),
+                "aws:skipRegionValidation": auto.ConfigValue("true"),
+                "aws:skipRequestingAccountId": auto.ConfigValue("true"),
+                "aws:skipMetadataApiCheck": auto.ConfigValue("true"),
+                "aws:insecure": auto.ConfigValue("true"),
+                "aws:s3UsePathStyle": auto.ConfigValue("true"),
             }
-        ]
-        if use_localstack
-        else {}
-    )
-    yield {
-        "aws:region": auto.ConfigValue(localstack["region"]),
-        "aws:accessKey": auto.ConfigValue("test"),
-        "aws:secretKey": auto.ConfigValue("test"),
-        # Point AWS services used by the provider to LocalStack and relax validations
-        "aws:endpoints": auto.ConfigValue(json.dumps(config)),
-        "aws:skipCredentialsValidation": auto.ConfigValue("true"),
-        "aws:skipRegionValidation": auto.ConfigValue("true"),
-        "aws:skipRequestingAccountId": auto.ConfigValue("true"),
-        "aws:skipMetadataApiCheck": auto.ConfigValue("true"),
-        # In case HTTP endpoints are used without TLS
-        "aws:insecure": auto.ConfigValue("true"),
-        # Useful if S3 is ever used in tests with LocalStack
-        "aws:s3UsePathStyle": auto.ConfigValue("true"),
-    }
+
+        if config:
+            stack.set_all_config(config)
+
+        try:
+            stack.refresh(on_output=lambda _: None)
+        except Exception:
+            pass
+
+        up_result = stack.up(on_output=lambda _: None)
+        outputs = {k: v.value for k, v in up_result.outputs.items()}
+
+        yield outputs
+    finally:
+        if teardown:
+            try:
+                stack.destroy(on_output=lambda _: None)
+            except Exception:
+                pass
+            try:
+                stack.workspace.remove_stack(stack_name)
+            except Exception:
+                pass
 
 
 @pytest.fixture(scope="session")
@@ -132,6 +95,7 @@ def test_network(request: pytest.FixtureRequest) -> Generator[str, None, None]:
     (e.g., LocalStack Lambdas <-> Postgres). Yields the network name.
     Respects DOCKER_TEST_NETWORK env var; defaults to 'ls-dev'.
     """
+
     network_name = os.environ.get("DOCKER_TEST_NETWORK", "ls-dev")
     client = docker.from_env()
 
@@ -184,37 +148,39 @@ def exec_sql_file(conn, sql_path: Path):
 
 
 @pytest.fixture(scope="session")
-def postgres_container() -> Generator[dict, None, None]:
+def postgres(test_network) -> Generator[dict, None, None]:
     """
     Starts a PostgreSQL container and yields connection info.
     Uses a random host port mapped to 5432.
     """
+    import psycopg2
+
     try:
         client = docker.from_env()
         client.ping()
     except Exception as e:
         assert False, f"Docker not available: {e}"
 
-    user = "test_user"
+    username = "test_user"
     password = "test_password"
-    database = "chinook"
+    database = "farm_market"
     image = "postgis/postgis:16-3.4"
 
     container = client.containers.run(
         image,
-        name=f"query-engine-test-{int(time.time())}",
         environment={
-            "POSTGRES_USER": user,
+            "POSTGRES_USER": username,
             "POSTGRES_PASSWORD": password,
             "POSTGRES_DB": database,
         },
         ports={"5432/tcp": 0},  # random host port
         detach=True,
+        network=test_network,
     )
 
     try:
         # Resolve mapped port
-        host = "127.0.0.1"
+        host = container.name
         host_port = None
         deadline = time.time() + 60
         while time.time() < deadline:
@@ -235,7 +201,7 @@ def postgres_container() -> Generator[dict, None, None]:
             try:
                 conn = psycopg2.connect(
                     dbname=database,
-                    user=user,
+                    user=username,
                     password=password,
                     host=host,
                     port=host_port,
@@ -246,12 +212,13 @@ def postgres_container() -> Generator[dict, None, None]:
                 time.sleep(0.5)
 
         yield {
-            "host": host,
-            "port": host_port,
-            "user": user,
+            "container_name": host,
+            "container_port": 5432,
+            "username": username,
             "password": password,
             "database": database,
-            "dsn": f"postgresql://{user}:{password}@{host}:{host_port}/{database}",
+            "host_port": host_port,
+            "dsn": f"postgresql://{username}:{password}@localhost:{host_port}/{database}",
         }
     finally:
         try:
@@ -314,7 +281,7 @@ def localstack(
       - container_id: Docker container id
       - services: comma list of services configured
     """
-    teardown: bool = _get_bool_option(request, "teardown", default=True)
+    teardown: bool = _get_bool_option(request, "--teardown", default=True)
     port: int = int(request.config.getoption("--localstack-port"))
     image: str = request.config.getoption("--localstack-image")
     services: str = request.config.getoption("--localstack-services")
@@ -399,7 +366,7 @@ def localstack(
     else:
         host_port = port
 
-    endpoint = f"http://127.0.0.1:{host_port}"
+    endpoint = f"http://localhost:{host_port}"
 
     # Set common AWS envs for child code that relies on defaults
     os.environ.setdefault("AWS_REGION", DEFAULT_REGION)
@@ -420,6 +387,7 @@ def localstack(
             "region": DEFAULT_REGION,
             "container_id": str(container.id),
             "services": services,
+            "port": str(host_port),
         }
     finally:
         if teardown:
@@ -428,33 +396,84 @@ def localstack(
                 container.stop(timeout=5)
             except Exception:
                 pass
+            try:
+                container.remove(v=True, force=True)
+            except Exception:
+                pass
 
 
-def to_localstack_url(real_url: str, edge_port: int = 4566) -> str:
+def to_localstack_url(api_url: str, edge_port: int = 4566, scheme: str = "http") -> str:
     """
-    Convert an actual API Gateway invoke URL to a LocalStack base URL.
+    Convert a real API Gateway invoke URL (or the exported domain/path) into the
+    equivalent LocalStack invoke URL.
 
-    Input (AWS):
-      https://{api_id}.execute-api.{region}.amazonaws.com/{stage}/<resource path>
+    Accepts forms like:
+      https://a1b2c3d4.execute-api.us-east-1.amazonaws.com/dev
+      https://a1b2c3d4.execute-api.us-east-1.amazonaws.com/dev/hello?name=Bob
+      a1b2c3d4.execute-api.us-east-1.amazonaws.com/dev
+      a1b2c3d4.execute-api.us-east-1.amazonaws.com/dev/hello
+    Already-converted LocalStack URLs are returned unchanged:
+      http://a1b2c3d4.execute-api.localhost.localstack.cloud:4566/dev/hello
 
-    Output (LocalStack base):
-      http://localhost:4566/restapis/{api_id}/{stage}/_user_request_
+    Parameters:
+      api_url   : Original AWS API Gateway invoke URL or domain + path.
+      edge_port : LocalStack edge port (default 4566 or whatever container mapped).
+      scheme    : Scheme to use for returned URL (default http).
 
-    Caller should append the resource path segments after _user_request_.
+    Returns:
+      LocalStack URL pointing at the same stage/path.
+
+    Raises:
+      ValueError if input is not a recognizable API Gateway invoke URL.
     """
     import re
-    from urllib.parse import urlparse
+    from urllib.parse import urlparse, urlunparse
 
-    p = urlparse(real_url)
-    m = re.match(
-        r"^(?P<api_id>[a-z0-9]+)\.execute-api\.(?P<region>[-a-z0-9]+)\.amazonaws\.com$",
-        p.netloc,
+    if not re.match(r"^[a-z]+://", api_url):
+        # prepend dummy scheme so urlparse works uniformly
+        api_url = f"https://{api_url}"
+
+    parsed = urlparse(api_url)
+
+    # If already a LocalStack style host, normalize (ensure port & scheme) and return
+    ls_host_re = re.compile(
+        r"^[a-z0-9]+\.execute-api\.localhost\.localstack\.cloud(?::\d+)?$",
+        re.IGNORECASE,
     )
+    if ls_host_re.match(parsed.netloc):
+        # Inject / adjust port if different
+        host_no_port = parsed.netloc.split(":")[0]
+        netloc = f"{host_no_port}:{edge_port}"
+        return urlunparse(
+            (
+                scheme,
+                netloc,
+                parsed.path or "/",
+                parsed.params,
+                parsed.query,
+                parsed.fragment,
+            )
+        )
+
+    # Match standard AWS execute-api host
+    aws_host_re = re.compile(
+        r"^(?P<api_id>[a-z0-9]+)\.execute-api\.(?P<region>[-a-z0-9]+)\.amazonaws\.com$",
+        re.IGNORECASE,
+    )
+    m = aws_host_re.match(parsed.netloc)
     if not m:
-        raise ValueError(f"Unrecognized API Gateway hostname: {p.netloc}")
+        raise ValueError(f"Unrecognized API Gateway hostname: {parsed.netloc}")
+
     api_id = m.group("api_id")
-    segments = [s for s in p.path.split("/") if s]
+    path = parsed.path or "/"
+
+    # Require a stage as first path segment
+    segments = [s for s in path.split("/") if s]
     if not segments:
-        raise ValueError("Missing stage segment in path")
-    stage = segments[0]
-    return f"http://localhost:{edge_port}/restapis/{api_id}/{stage}/_user_request_"
+        raise ValueError("Missing stage segment in API Gateway path")
+    # Reconstruct path exactly as given (we don't strip or re-add trailing slash)
+    new_host = f"{api_id}.execute-api.localhost.localstack.cloud:{edge_port}"
+
+    return urlunparse(
+        (scheme, new_host, path, parsed.params, parsed.query, parsed.fragment)
+    )

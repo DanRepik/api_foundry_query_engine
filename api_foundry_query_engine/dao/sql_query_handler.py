@@ -346,7 +346,7 @@ class SQLSchemaQueryHandler(SQLQueryHandler):
 
     @property
     def table_expression(self) -> str:
-        return self.schema_object.quailified_name or ""
+        return self.schema_object.qualified_name or ""
 
     @property
     def selection_results(self) -> Dict:
