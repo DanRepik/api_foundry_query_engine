@@ -1,17 +1,60 @@
-from api_foundry_query_engine.dao.sql_query_handler import SQLSchemaQueryHandler
-from api_foundry_query_engine.operation import Operation
+import re
+from typing import Match
+from api_foundry_query_engine.dao.sql_query_handler import (
+    SQLSchemaQueryHandler,
+)
 from api_foundry_query_engine.utils.app_exception import ApplicationException
-from api_foundry_query_engine.utils.api_model import SchemaObject, SchemaObjectProperty
-from api_foundry_query_engine.utils.logger import logger
-
-log = logger(__name__)
+from api_foundry_query_engine.utils.api_model import SchemaObjectProperty
 
 
 class SQLSelectSchemaQueryHandler(SQLSchemaQueryHandler):
-    def __init__(
-        self, operation: Operation, schema_object: SchemaObject, engine: str
-    ) -> None:
+    def _template_where(self, expr: str) -> str:
+        if not expr:
+            return expr
+
+        def _quote(val: object) -> str:
+            if val is None:
+                return "NULL"
+            if isinstance(val, (int, float)):
+                return str(val)
+            s = str(val).replace("'", "''")
+            return f"'{s}'"
+
+        def _replace(m: Match[str]) -> str:
+            key = m.group(1)
+            claims = self.operation.claims or {}
+            return _quote(claims.get(key))
+
+        return re.sub(r"\$\{claims\.([A-Za-z0-9_]+)\}", _replace, expr)
+
+    def _row_where_clause(self) -> str:
+        perms = getattr(self.schema_object, "permissions", None) or {}
+        # provider-first default
+        if "default" in perms:
+            provider = perms.get("default", {}) or {}
+            read_map = provider.get("read", {}) or {}
+        else:
+            # legacy role-first -> synthesize read map
+            read_map = {}
+            for role, role_perms in perms.items():
+                if isinstance(role_perms, dict):
+                    read_map[role] = role_perms.get("read")
+
+        filters = []
+        for role in self.operation.roles or []:
+            rule = read_map.get(role)
+            if isinstance(rule, dict):
+                where = rule.get("where")
+                if isinstance(where, str) and where.strip():
+                    filters.append(self._template_where(where))
+        if not filters:
+            return ""
+        return "(" + ") OR (".join(filters) + ")"
+
+    def __init__(self, operation, schema_object, engine: str) -> None:
         super().__init__(operation, schema_object, engine)
+        # Lazy cache for selection results
+        self._selection_results = None
 
     @property
     def sql(self) -> str:
@@ -63,38 +106,39 @@ class SQLSelectSchemaQueryHandler(SQLSchemaQueryHandler):
                             + " does not have property "
                             + parts[1],
                         )
-                    property = relation.child_schema_object.properties[parts[1]]
+                    prop = relation.child_schema_object.properties[parts[1]]
                     prefix = self.prefix_map[parts[0]]
                 else:
-                    property = self.schema_object.properties[parts[0]]
-                    if self.schema_object.api_name is None:
-                        raise ApplicationException(
-                            500,
-                            "schema_object.api_name is None, cannot use as key in prefix_map",
-                        )
-                    prefix = self.prefix_map[self.schema_object.api_name]
-            except KeyError:
+                    prop = self.schema_object.properties[parts[0]]
+                    prefix = self.prefix_map[str(self.schema_object.api_name)]
+            except KeyError as exc:
                 raise ApplicationException(
                     500,
-                    "Invalid query parameter, property not found. "
-                    + "schema object: "
-                    + str(self.schema_object.api_name)
-                    + ", property: "
-                    + name,
-                )
+                    (
+                        "Invalid query parameter, property not found. "
+                        + "schema object: "
+                        + str(self.schema_object.api_name)
+                        + ", property: "
+                        + name
+                    ),
+                ) from exc
 
-            assignment, holders = self.search_value_assignment(property, value, prefix)
+            assignment, holders = self.search_value_assignment(prop, value, prefix)
             self.active_prefixes.add(prefix)
             conditions.append(assignment)
             self.search_placeholders.update(holders)
+        # append row-level filters if present
+        row_filter = self._row_where_clause()
+        if row_filter:
+            conditions.append(f"({row_filter})")
 
-        return f" WHERE {' AND '.join(conditions)}" if len(conditions) > 0 else ""
+        return (" WHERE " + " AND ".join(conditions)) if conditions else ""
 
     @property
     def table_expression(self) -> str:
         joins = []
         parent_prefix = self.prefix_map[str(self.schema_object.api_name)]
-        for name, relation in self.schema_object.relations.items():
+        for _, relation in self.schema_object.relations.items():
             child_prefix = self.prefix_map[str(relation.api_name)]
             if child_prefix in self.active_prefixes:
                 joins.append(
@@ -121,7 +165,7 @@ class SQLSelectSchemaQueryHandler(SQLSchemaQueryHandler):
 
     @property
     def selection_results(self) -> dict:
-        if not hasattr(self, "_selection_results"):
+        if self._selection_results is None:
             self._selection_results = {}
             if "count" in self.operation.metadata_params:
                 self._selection_results = {
@@ -163,10 +207,14 @@ class SQLSelectSchemaQueryHandler(SQLSchemaQueryHandler):
                 # Filter and prefix keys for the current entity
                 # and regular expressions
                 allowed_properties = self.check_permissions(
-                    "read", schema_object.permissions, schema_object.properties
+                    "read",
+                    schema_object.permissions,
+                    schema_object.properties,
                 )
                 filtered_keys = self.filter_and_prefix_keys(
-                    reg_exs, allowed_properties, self.prefix_map[relation]
+                    reg_exs,
+                    allowed_properties,
+                    self.prefix_map[relation],
                 )
 
                 # Extend the result map with the filtered keys
@@ -175,15 +223,18 @@ class SQLSelectSchemaQueryHandler(SQLSchemaQueryHandler):
             if len(self._selection_results) == 0:
                 raise ApplicationException(
                     402,
-                    "After applying permissions there are no properties returned in response",
+                    (
+                        "After applying permissions there are no properties "
+                        "returned in response"
+                    ),
                 )
         return self._selection_results
 
-    def get_regex_map(self, filter_str: str) -> dict[str, list]:
+    def get_regex_map(self, filter_str: str) -> dict:
         result = {}
 
-        for filter in filter_str.split():
-            parts = filter.split(":")
+        for flt in filter_str.split():
+            parts = flt.split(":")
             entity = parts[0] if len(parts) > 1 else self.schema_object.api_name
             expression = parts[-1]
 
@@ -200,17 +251,17 @@ class SQLSelectSchemaQueryHandler(SQLSchemaQueryHandler):
     def marshal_record(self, record) -> dict:
         object_set = {}
         for name, value in record.items():
-            property = self.selection_results[name]
+            prop = self.selection_results[name]
             parts = name.split(".")
             component = (
                 parts[0]
                 if len(parts) > 1
                 else self.prefix_map[str(self.schema_object.api_name)]
             )
-            object = object_set.get(component, {})
-            if not object:
-                object_set[component] = object
-            object[property.api_name] = property.convert_to_api_value(value)
+            obj = object_set.get(component, {})
+            if not obj:
+                object_set[component] = obj
+            obj[prop.api_name] = prop.convert_to_api_value(value)
 
         result = object_set[self.prefix_map[str(self.schema_object.api_name)]]
         for name, prefix in self.prefix_map.items():
@@ -243,13 +294,13 @@ class SQLSelectSchemaQueryHandler(SQLSchemaQueryHandler):
             field_parts = field_name.split(".")
             if len(field_parts) == 1:
                 prefix = self.prefix_map[str(self.schema_object.api_name)]
-                property = self.schema_object.properties.get(field_parts[0])
-                if not property:
+                prop = self.schema_object.properties.get(field_parts[0])
+                if not prop:
                     raise ApplicationException(
                         400,
                         f"Invalid order by property, schema object: {self.schema_object.api_name} does not have a property: {field_parts[0]}",  # noqa E501
                     )
-                column = property.column_name
+                column = prop.column_name
             else:
                 # Extract the schema object for the current entity
                 relation_property = self.schema_object.relations.get(field_parts[0])
@@ -272,13 +323,13 @@ class SQLSelectSchemaQueryHandler(SQLSchemaQueryHandler):
                     schema_object = self.schema_object
 
                 prefix = self.prefix_map[field_parts[0]]
-                property = schema_object.properties.get(field_parts[1])
-                if not property:
+                prop = schema_object.properties.get(field_parts[1])
+                if not prop:
                     raise ApplicationException(
                         400,
                         f"Invalid order by property, schema object: {schema_object.api_name} does not have a property: {field_parts[1]}",  # noqa E501
                     )
-                column = property.column_name
+                column = prop.column_name
                 self.active_prefixes.add(prefix)
                 use_prefixes = True
 

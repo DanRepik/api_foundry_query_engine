@@ -70,6 +70,7 @@ class GatewayAdapter(Adapter):
             metadata_params=metadata_params,
             roles=roles,
             subject=subject,
+            claims=claims,
         )
 
     def _convert_parameters(self, parameters):

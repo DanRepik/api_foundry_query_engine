@@ -6,16 +6,17 @@ from pathlib import Path
 
 from api_foundry_query_engine.utils.api_model import set_api_model
 
-from .infrastructure_fixtures import deploy  # noqa F401
-from .infrastructure_fixtures import exec_sql_file
-from .infrastructure_fixtures import postgres  # noqa F401
-from .infrastructure_fixtures import localstack  # noqa F401
-from .infrastructure_fixtures import test_network  # noqa F401
+from fixture_foundry import deploy
+from fixture_foundry import deploy  # noqa F401
+from fixture_foundry import exec_sql_file
+from fixture_foundry import postgres  # noqa F401
+from fixture_foundry import localstack  # noqa F401
+from fixture_foundry import container_network  # noqa F401
 
 
 @pytest.fixture(scope="session")
 def chinook_db(postgres):  # noqa: F811
-    # Locate DDL files (project root is one parent up from this test file: backend/tests/ -> farm_market/)
+    # Locate DDL files (project root is one parent up from this test file
     project_root = Path(__file__).resolve().parents[1]
     chinook_sql = project_root / "tests" / "Chinook_Postgres.sql"
 
@@ -24,7 +25,8 @@ def chinook_db(postgres):  # noqa: F811
     # Connect and load schemas
     conn = psycopg2.connect(postgres["dsn"])
     try:
-        conn.autocommit = True  # allow full scripts to run without transaction issues
+        # allow full scripts to run without transaction issues
+        conn.autocommit = True
         exec_sql_file(conn, chinook_sql)
 
         yield postgres
