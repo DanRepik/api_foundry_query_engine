@@ -36,6 +36,9 @@ class Operation:
         store_params: Optional[Dict[str, Any]] = None,
         metadata_params: Optional[Dict[str, Any]] = None,
         roles: Optional[Dict[str, Any]] = None,
+        scope: Optional[Dict[str, Any]] = None,
+        groups: Optional[Dict[str, Any]] = None,
+        permissions: Optional[Dict[str, Any]] = None,
         subject: Optional[str] = None,
         claims: Optional[Dict[str, Any]] = None,
     ):
@@ -73,7 +76,10 @@ class Operation:
         self.metadata_params = metadata_params or {}
 
         # Roles defining the context in which the operation is allowed.
-        self.roles = roles or {}
+        self.scope = scope or {}
+        self.roles = roles or []
+        self.groups = groups or []
+        self.permissions = permissions or []
 
         self.subject = subject
         # Full set of claims (when available). Used for row-level filters

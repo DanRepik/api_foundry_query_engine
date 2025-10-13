@@ -1,7 +1,7 @@
 import json
 import logging
 import os
-from typing import Optional, Mapping
+from typing import Optional, Mapping, Any
 
 from api_foundry_query_engine.utils.api_model import set_api_model
 from api_foundry_query_engine.utils.app_exception import ApplicationException
@@ -14,8 +14,8 @@ class QueryEngine:
     def __init__(self, config: Mapping[str, str]):
         self.adapter = GatewayAdapter(config)
 
-    def handler(self, event):
-        log.debug(f"event: {event}")
+    def handler(self, event) -> dict[str, Any]:
+        log.debug("event: %s", event)
         try:
             response = self.adapter.process_event(event)
 
@@ -27,20 +27,20 @@ class QueryEngine:
                 "body": json.dumps(response),
             }
         except ApplicationException as e:
-            log.error(f"exception: {e}", exc_info=True)
+            log.error("exception: %s", e, exc_info=True)
             return {
                 "isBase64Encoded": False,
                 "statusCode": e.status_code,
                 "headers": {"Content-Type": "application/json"},
-                "body": json.dumps({"message": f"exception: {e}"}),
+                "body": json.dumps({"message": "exception: %s" % e}),
             }
-        except Exception as e:
-            log.error(f"exception: {e}", exc_info=True)
+        except RuntimeError as e:
+            log.error("runtime error: %s", e, exc_info=True)
             return {
                 "isBase64Encoded": False,
                 "statusCode": 500,
                 "headers": {"Content-Type": "application/json"},
-                "body": json.dumps({"message": f"exception: {e}"}),
+                "body": json.dumps({"message": f"runtime error: {e}"}),
             }
 
 
@@ -49,16 +49,14 @@ query_engine: Optional[QueryEngine] = None
 
 
 def handler(event, _):
-    global engine_config, query_engine
-    log.info(f"engine_config: {engine_config}")
-    if engine_config is None:
+    if not hasattr(handler, "engine_config"):
         log.info("Loading engine config from environment variables")
-        engine_config = os.environ
-        log.info(f"engine_config: {engine_config}")
+        handler.engine_config = os.environ
+        log.info(f"engine_config: {handler.engine_config}")
 
-    if query_engine is None:
-        set_api_model(engine_config)
+    if not hasattr(handler, "query_engine"):
+        set_api_model(handler.engine_config)
         log.info("Creating QueryEngine instance")
-        query_engine = QueryEngine(engine_config)
+        handler.query_engine = QueryEngine(handler.engine_config)
 
-    return query_engine.handler(event)
+    return handler.query_engine.handler(event)

@@ -146,13 +146,6 @@ schema_objects:
                 max_length: 160
                 required: false
                 type: string
-            year_released:
-                api_name: year_released
-                api_type: integer
-                column_name: year_released
-                column_type: integer
-                type: integer
-                required: false
         relations:
             artist:
                 api_name: artist

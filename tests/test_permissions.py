@@ -198,7 +198,7 @@ def test_read_some_restrictions(chinook_env):
             entity="album",
             action="read",
             query_params={"album_id": "24"},
-            roles={"sales_associate": True},
+            roles=["sales_associate"],
         ),
         "postgres",
     )
@@ -222,7 +222,7 @@ def test_read_no_restrictions(chinook_env):
             entity="album",
             action="read",
             query_params={"album_id": "24"},
-            roles={"sales_manager": True},
+            roles=["sales_manager"],
         ),
         "postgres",
     )
@@ -233,7 +233,7 @@ def test_read_no_restrictions(chinook_env):
     log.info(f"sql: {sql_handler.sql}")
     assert (
         sql_handler.sql
-        == "SELECT a.album_id, a.artist_id, a.title, a.year_released FROM album AS a WHERE a.album_id = %(a_album_id)s"
+        == "SELECT a.album_id, a.artist_id, a.title FROM album AS a WHERE a.album_id = %(a_album_id)s"
     )
 
 
@@ -247,7 +247,7 @@ def test_read_all_restricted(chinook_env):
             entity="album",
             action="read",
             query_params={"album_id": "24"},
-            roles={"customer_agent": True},
+            roles=["customer_agent"],
         ),
         "postgres",
     )
@@ -307,7 +307,7 @@ def test_create_prohibited_property(chinook_env):
             entity="album",
             action="create",
             store_params={"title": "something different"},
-            roles={"sales_associate": True},
+            roles=["sales_associate"],
         ),
         "postgres",
     )
@@ -320,7 +320,7 @@ def test_create_prohibited_property(chinook_env):
 
 
 def test_create_allowed_property(chinook_env):
-    # sales associates cannot update title
+    # sales manager can create title
     schema_object = get_schema_object("album")
     log.info(f"schema_object: {schema_object}")
 
@@ -328,8 +328,8 @@ def test_create_allowed_property(chinook_env):
         Operation(
             entity="album",
             action="create",
-            store_params={"year_released": "2024"},
-            roles={"sales_associate": True},
+            store_params={"title": "new title"},
+            roles=["sales_manager"],
         ),
         "postgres",
     )
@@ -338,7 +338,7 @@ def test_create_allowed_property(chinook_env):
     log.info(f"sql: {sql}")
     assert (
         sql
-        == "INSERT INTO album ( year_released ) VALUES ( %(year_released)s) RETURNING album_id, title"
+        == "INSERT INTO album ( title ) VALUES ( %(title)s) RETURNING album_id, artist_id, title"
     )
 
 
@@ -353,7 +353,7 @@ def test_update_prohibited_property(chinook_env):
             action="update",
             query_params={"album_id": "24"},
             store_params={"title": "something different"},
-            roles={"sales_associate": True},
+            roles=["sales_associate"],
         ),
         "postgres",
     )
@@ -369,7 +369,7 @@ def test_update_prohibited_property(chinook_env):
 
 
 def test_update_allowed_property(chinook_env):
-    # sales associates cannot update title
+    # sales manager can update title
     schema_object = get_schema_object("album")
     log.info(f"schema_object: {schema_object}")
 
@@ -378,8 +378,8 @@ def test_update_allowed_property(chinook_env):
             entity="album",
             action="update",
             query_params={"album_id": "24"},
-            store_params={"year_released": "2024"},
-            roles={"sales_associate": True},
+            store_params={"title": "2024"},
+            roles=["sales_manager"],
         ),
         "postgres",
     )
@@ -388,7 +388,7 @@ def test_update_allowed_property(chinook_env):
     log.info(f"sql: {sql}")
     assert (
         sql
-        == "UPDATE album SET year_released = %(year_released)s WHERE album_id = %(album_id)s RETURNING album_id, title"
+        == "UPDATE album SET title = %(title)s WHERE album_id = %(album_id)s RETURNING album_id, artist_id, title"
     )
 
 
@@ -402,7 +402,7 @@ def test_delete_prohibited(chinook_env):
             entity="album",
             action="delete",
             query_params={"album_id": 5},
-            roles={"sales_associate": True},
+            roles=["sales_associate"],
         ),
         "postgres",
     )
@@ -424,7 +424,7 @@ def test_delete_allowed(chinook_env):
             entity="album",
             action="delete",
             query_params={"album_id": 5},
-            roles={"sales_manager": True},
+            roles=["sales_manager"],
         ),
         "postgres",
     )
@@ -433,5 +433,5 @@ def test_delete_allowed(chinook_env):
     log.info(f"sql: {sql}")
     assert (
         sql
-        == "DELETE FROM album WHERE album_id = %(album_id)s RETURNING album_id, artist_id, title, year_released"
+        == "DELETE FROM album WHERE album_id = %(album_id)s RETURNING album_id, artist_id, title"
     )
