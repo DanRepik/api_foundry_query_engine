@@ -4,15 +4,13 @@ from api_foundry_query_engine.utils.logger import logger
 from api_foundry_query_engine.operation import Operation
 from api_foundry_query_engine.services.transactional_service import TransactionalService
 
-from tests.test_fixtures import load_model, db_secrets  # noqa F401
-
 log = logger(__name__)
 
 
 @pytest.mark.integration
 class TestCustomOperations:
-    def test_top_albums(self, load_model, db_secrets):  # noqa F811
-        result = TransactionalService().execute(
+    def test_top_albums(self, chinook_env):  # noqa F811
+        result = TransactionalService(chinook_env).execute(
             Operation(
                 entity="top_selling_albums",
                 action="read",
@@ -38,13 +36,13 @@ class TestCustomOperations:
             "total_sold": 8,
         }
         assert result[4] == {
-            "album_id": 51,
-            "album_title": "Up An' Atom",
+            "album_id": 38,
+            "album_title": "Heart of the Night",
             "total_sold": 3,
         }
 
-    def test_top_albums_rename(self, load_model, db_secrets):  # noqa F811
-        result = TransactionalService().execute(
+    def test_top_albums_rename(self, chinook_env):  # noqa F811
+        result = TransactionalService(chinook_env).execute(
             Operation(
                 entity="top_selling_albums_rename",
                 action="read",
@@ -70,7 +68,7 @@ class TestCustomOperations:
             "total_sold": 8,
         }
         assert result[4] == {
-            "album_id": 51,
-            "album_title": "Up An' Atom",
+            "album_id": 38,
+            "album_title": "Heart of the Night",
             "total_sold": 3,
         }

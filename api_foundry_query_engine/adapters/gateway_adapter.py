@@ -1,7 +1,9 @@
 import json
+from typing import Any, Dict, List, Optional, Tuple
 
 from api_foundry_query_engine.adapters.adapter import Adapter
 from api_foundry_query_engine.operation import Operation
+from api_foundry_query_engine.utils.app_exception import ApplicationException
 
 actions_map = {
     "GET": "read",
@@ -12,7 +14,7 @@ actions_map = {
 
 
 class GatewayAdapter(Adapter):
-    def marshal(self, result: list[dict]):
+    def marshal(self, result: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
         Marshal the result into a event response
 
@@ -24,7 +26,7 @@ class GatewayAdapter(Adapter):
         """
         return super().marshal(result)
 
-    def unmarshal(self, event):
+    def unmarshal(self, event: Dict[str, Any]) -> Operation:
         """
         Get parameters from the Lambda event.
 
@@ -34,8 +36,15 @@ class GatewayAdapter(Adapter):
         Returns:
         - tuple: Tuple containing data, query and metadata parameters.
         """
-        entity = event.get("resource").split("/")[1]
-        action = actions_map.get(event.get("httpMethod").upper(), "read")
+        resource = event.get("resource")
+        if resource is not None and "/" in resource:
+            parts = resource.split("/")
+            entity = parts[1] if len(parts) > 1 else None
+        else:
+            entity = None
+
+        method = str(event.get("httpMethod", "")).upper()
+        action = actions_map.get(method, "read")
 
         event_params = {}
 
@@ -56,11 +65,40 @@ class GatewayAdapter(Adapter):
         if body is not None and len(body) > 0:
             store_params = json.loads(body)
 
-        roles = []
         authorizer_info = event.get("requestContext", {}).get("authorizer", {})
         claims = authorizer_info.get("claims", {})
         roles = claims.get("roles", [])
-        subject = claims.get("subject")
+        groups = claims.get("groups", [])
+        subject = claims.get("sub")
+        permissions = claims.get("permissions", [])
+        scope_str = claims.get("scope")
+
+        # Enforce OAuth scopes (simulating API Gateway authorizer behavior)
+        # Required scope pattern: read|write|delete:<entity>
+        if entity and scope_str:
+            required_action = {
+                "GET": "read",
+                "POST": "write",
+                "PUT": "write",
+                "PATCH": "write",
+                "DELETE": "delete",
+            }.get(method, "read")
+            required_scope = f"{required_action}:{entity}"
+            token_scopes = set(str(scope_str).split())
+
+            def _has_scope(required: str) -> bool:
+                return (
+                    required in token_scopes
+                    or f"{required_action}:*" in token_scopes
+                    or "*" in token_scopes
+                    or "*:*" in token_scopes
+                )
+
+            if not _has_scope(required_scope):
+                raise ApplicationException(
+                    401,
+                    ("insufficient_scope: required_scope=" + required_scope),
+                )
 
         return Operation(
             entity=entity,
@@ -69,10 +107,15 @@ class GatewayAdapter(Adapter):
             query_params=query_params,
             metadata_params=metadata_params,
             roles=roles,
+            groups=groups,
             subject=subject,
+            permissions=permissions,
+            claims=claims,
         )
 
-    def _convert_parameters(self, parameters):
+    def _convert_parameters(
+        self, parameters: Optional[Dict[str, Any]]
+    ) -> Optional[Dict[str, Any]]:
         """
         Convert parameters to appropriate types.
 
@@ -96,7 +139,9 @@ class GatewayAdapter(Adapter):
                     result[parameter] = value
         return result
 
-    def split_params(self, parameters: dict):
+    def split_params(
+        self, parameters: Dict[str, Any]
+    ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         """
         Split a dictionary into two dictionaries based on keys.
 

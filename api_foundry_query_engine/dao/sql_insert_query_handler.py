@@ -70,22 +70,29 @@ class SQLInsertSchemaQueryHandler(SQLSchemaQueryHandler):
         placeholders = []
         columns = []
 
-        allowed_properties = self.check_permissions(
+        allowed_property_names = self.check_permissions(
             "write", self.schema_object.permissions, self.schema_object.properties
         )
+        allowed_properties = {
+            k: v
+            for k, v in self.schema_object.properties.items()
+            if k in allowed_property_names
+        }
         log.info(f"allowed properties: {allowed_properties}")
+
+        import json
+
         for name, value in self.operation.store_params.items():
             parts = name.split(".")
 
-            try:
-                if len(parts) > 1:
-                    raise ApplicationException(
-                        400,
-                        "Properties can not be set on associated objects " + name,
-                    )
+            if len(parts) > 1:
+                raise ApplicationException(
+                    400,
+                    "Properties can not be set on associated objects " + name,
+                )
 
-                property = allowed_properties[parts[0]]
-            except KeyError:
+            property = allowed_properties.get(parts[0], None)
+            if property is None:
                 if parts[0] not in self.schema_object.properties:
                     raise ApplicationException(400, f"Invalid property: {name}")
                 else:
@@ -95,10 +102,18 @@ class SQLInsertSchemaQueryHandler(SQLSchemaQueryHandler):
                     )
 
             columns.append(property.column_name)
+            if property.api_name is None:
+                raise ApplicationException(
+                    400, f"Property '{name}' does not have a valid api_name."
+                )
             placeholders.append(self.placeholder(property, property.api_name))
-            self.store_placeholders[property.api_name] = property.convert_to_db_value(
-                value
-            )
+            # Serialize embedded objects to JSON
+            if property.api_type == "object":
+                self.store_placeholders[property.api_name] = json.dumps(value)
+            else:
+                self.store_placeholders[
+                    property.api_name
+                ] = property.convert_to_db_value(value)
 
         if self.key_property:
             if self.key_property.key_type == "sequence":

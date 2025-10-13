@@ -150,7 +150,7 @@ class SQLQueryHandler:
 
     def placeholder(self, property: SchemaObjectProperty, param: str = "") -> str:
         if len(param) == 0:
-            param = property.api_name
+            param = property.api_name if property.api_name is not None else ""
 
         if self.engine == "oracle":
             if property.column_type == "date":
@@ -166,7 +166,7 @@ class SQLQueryHandler:
         self,
         permission_type: str,
         permissions: Optional[dict],
-        properties: Optional[List[str]],
+        properties: Dict[str, SchemaObjectProperty],
     ) -> Dict[str, SchemaObjectProperty]:
         """
         Checks the user's permissions for the specified permission type.
@@ -240,7 +240,7 @@ class SQLQueryHandler:
             ]
             sql = f"{column} {'NOT ' if operand == 'not-in' else ''}IN ({', '.join(assignments)})"  # noqa E501
         else:
-            sql = f"{column} {operand} {self.placeholder(property, placeholder_name)}"
+            sql = f"{column} {operand} {self.placeholder(property, str(placeholder_name))}"
         return sql
 
     def generate_placeholders(
@@ -346,7 +346,7 @@ class SQLSchemaQueryHandler(SQLQueryHandler):
 
     @property
     def table_expression(self) -> str:
-        return self.schema_object.table_name
+        return self.schema_object.qualified_name or ""
 
     @property
     def selection_results(self) -> Dict:
@@ -393,9 +393,9 @@ class SQLSchemaQueryHandler(SQLQueryHandler):
                 raise ApplicationException(
                     400,
                     "Concurrency settings prohibit multi-record updates "
-                    + self.schema_object.api_name
+                    + str(self.schema_object.api_name)
                     + ", property: "
-                    + property.api_name,
+                    + str(property.api_name),
                 )
 
             assignment, holders = self.search_value_assignment(property, value)

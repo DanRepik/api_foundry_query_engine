@@ -1,7 +1,15 @@
 build
 twine
-pytest
 psycopg2-binary
+pulumi_aws
 
 pytest
+pytest-cov
+pre-commit
+docker
+boto3
+PyYAML
 requests
+
+-e ../cloud_foundry
+fixture_foundry

@@ -1,0 +1,823 @@
+path_operations:
+    top_selling_albums_read:
+        action: read
+        database: chinook
+        entity: top_selling_albums
+        inputs:
+            end:
+                api_name: end
+                api_type: string
+                column_name: end
+                column_type: string
+                required: true
+                type: string
+            limit:
+                api_name: limit
+                api_type: string
+                column_name: limit
+                column_type: string
+                default: 10
+                required: false
+                type: string
+            start:
+                api_name: start
+                api_type: string
+                column_name: start
+                column_type: string
+                required: true
+                type: string
+        outputs:
+            album_id:
+                api_name: album_id
+                api_type: integer
+                column_name: album_id
+                column_type: integer
+                required: false
+                type: integer
+            album_title:
+                api_name: album_title
+                api_type: string
+                column_name: album_title
+                column_type: string
+                required: false
+                type: string
+            total_sold:
+                api_name: total_sold
+                api_type: integer
+                column_name: total_sold
+                column_type: integer
+                required: false
+                type: integer
+        sql: "SELECT\n    a.album_id as album_id,\n    a.title AS album_title,\n \
+            \   COUNT(il.invoice_line_id) AS total_sold\nFROM\n    invoice_line il\n\
+            JOIN invoice i ON\n    il.invoice_id = i.invoice_id\nJOIN\n    track t\
+            \ ON il.track_id = t.track_id\nJOIN\n    album a ON t.album_id = a.album_id\n\
+            WHERE\n    i.invoice_date >= :start\n    AND i.invoice_date <= :end\n\
+            GROUP BY\n    a.album_id\nORDER BY\n    total_sold DESC\nLIMIT :limit\n"
+    top_selling_albums_rename_read:
+        action: read
+        database: chinook
+        entity: top_selling_albums_rename
+        inputs:
+            end:
+                api_name: end
+                api_type: string
+                column_name: end
+                column_type: string
+                required: true
+                type: string
+            limit:
+                api_name: limit
+                api_type: string
+                column_name: limit
+                column_type: string
+                default: 10
+                required: false
+                type: string
+            start:
+                api_name: start
+                api_type: string
+                column_name: start
+                column_type: string
+                required: true
+                type: string
+        outputs:
+            album_id:
+                api_name: album_id
+                api_type: integer
+                column_name: a.album_id
+                column_type: integer
+                required: false
+                type: integer
+            album_title:
+                api_name: album_title
+                api_type: string
+                column_name: a.title
+                column_type: string
+                required: false
+                type: string
+            total_sold:
+                api_name: total_sold
+                api_type: integer
+                column_name: COUNT(il.invoice_line_id)
+                column_type: integer
+                required: false
+                type: integer
+        sql: "SELECT\n    a.album_id,\n    a.title,\n    COUNT(il.invoice_line_id)\n\
+            FROM\n    invoice_line il\nJOIN invoice i ON\n    il.invoice_id = i.invoice_id\n\
+            JOIN\n    track t ON il.track_id = t.track_id\nJOIN\n    album a ON t.album_id\
+            \ = a.album_id\nWHERE\n    i.invoice_date >= :start\n    AND i.invoice_date\
+            \ <= :end\nGROUP BY\n    a.album_id\nORDER BY\n    COUNT(il.invoice_line_id)\
+            \ DESC\nLIMIT :limit;\n"
+schema_objects:
+    album:
+        api_name: album
+        database: chinook
+        primary_key: album_id
+        permissions:
+            sales_associate:
+                read: album_id|title
+                write: year_released
+            sales_manager:
+                delete: true
+                read: .*
+                write: .*
+        properties:
+            album_id:
+                api_name: album_id
+                api_type: integer
+                column_name: album_id
+                column_type: integer
+                key_type: auto
+                required: false
+                type: integer
+            artist_id:
+                api_name: artist_id
+                api_type: integer
+                column_name: artist_id
+                column_type: integer
+                required: false
+                type: integer
+            title:
+                api_name: title
+                api_type: string
+                column_name: title
+                column_type: string
+                max_length: 160
+                required: false
+                type: string
+        relations:
+            artist:
+                api_name: artist
+                parent_property: artist_id
+                schema_name: artist
+                type: object
+            track_items:
+                api_name: track_items
+                child_property: album_id
+                parent_property: album_id
+                schema_name: track
+                type: array
+        table_name: album
+    artist:
+        api_name: artist
+        database: chinook
+        primary_key: artist_id
+        properties:
+            artist_id:
+                api_name: artist_id
+                api_type: integer
+                column_name: artist_id
+                column_type: integer
+                key_type: auto
+                required: false
+                type: integer
+            name:
+                api_name: name
+                api_type: string
+                column_name: name
+                column_type: string
+                max_length: 120
+                required: false
+                type: string
+        relations:
+            album_items:
+                api_name: album_items
+                child_property: artist_id
+                parent_property: artist_id
+                schema_name: album
+                type: array
+        table_name: artist
+    customer:
+        api_name: customer
+        concurrency_property: version_stamp
+        database: chinook
+        primary_key: customer_id
+        properties:
+            address:
+                api_name: address
+                api_type: string
+                column_name: address
+                column_type: string
+                max_length: 70
+                required: false
+                type: string
+            city:
+                api_name: city
+                api_type: string
+                column_name: city
+                column_type: string
+                max_length: 40
+                required: false
+                type: string
+            company:
+                api_name: company
+                api_type: string
+                column_name: company
+                column_type: string
+                max_length: 80
+                required: false
+                type: string
+            country:
+                api_name: country
+                api_type: string
+                column_name: country
+                column_type: string
+                max_length: 40
+                required: false
+                type: string
+            customer_id:
+                api_name: customer_id
+                api_type: integer
+                column_name: customer_id
+                column_type: integer
+                key_type: auto
+                required: false
+                type: integer
+            email:
+                api_name: email
+                api_type: string
+                column_name: email
+                column_type: string
+                max_length: 60
+                required: false
+                type: string
+            fax:
+                api_name: fax
+                api_type: string
+                column_name: fax
+                column_type: string
+                max_length: 24
+                required: false
+                type: string
+            first_name:
+                api_name: first_name
+                api_type: string
+                column_name: first_name
+                column_type: string
+                max_length: 40
+                required: false
+                type: string
+            last_name:
+                api_name: last_name
+                api_type: string
+                column_name: last_name
+                column_type: string
+                max_length: 20
+                required: false
+                type: string
+            phone:
+                api_name: phone
+                api_type: string
+                column_name: phone
+                column_type: string
+                max_length: 24
+                required: false
+                type: string
+            postal_code:
+                api_name: postal_code
+                api_type: string
+                column_name: postal_code
+                column_type: string
+                max_length: 10
+                required: false
+                type: string
+            state:
+                api_name: state
+                api_type: string
+                column_name: state
+                column_type: string
+                max_length: 40
+                required: false
+                type: string
+            support_rep_id:
+                api_name: support_rep_id
+                api_type: integer
+                column_name: support_rep_id
+                column_type: integer
+                required: false
+                type: integer
+            version_stamp:
+                api_name: version_stamp
+                api_type: uuid
+                column_name: version_stamp
+                column_type: uuid
+                required: false
+                type: string
+        relations:
+            invoice_items:
+                api_name: invoice_items
+                child_property: customer_id
+                parent_property: customer_id
+                schema_name: invoice
+                type: array
+        table_name: customer
+    employee:
+        api_name: employee
+        database: chinook
+        primary_key: employee_id
+        properties:
+            address:
+                api_name: address
+                api_type: string
+                column_name: address
+                column_type: string
+                max_length: 70
+                required: false
+                type: string
+            birth_date:
+                api_name: birth_date
+                api_type: date-time
+                column_name: birth_date
+                column_type: date-time
+                required: false
+                type: string
+            city:
+                api_name: city
+                api_type: string
+                column_name: city
+                column_type: string
+                max_length: 40
+                required: false
+                type: string
+            country:
+                api_name: country
+                api_type: string
+                column_name: country
+                column_type: string
+                max_length: 40
+                required: false
+                type: string
+            email:
+                api_name: email
+                api_type: string
+                column_name: email
+                column_type: string
+                max_length: 60
+                required: false
+                type: string
+            employee_id:
+                api_name: employee_id
+                api_type: integer
+                column_name: employee_id
+                column_type: integer
+                key_type: auto
+                required: false
+                type: integer
+            fax:
+                api_name: fax
+                api_type: string
+                column_name: fax
+                column_type: string
+                max_length: 24
+                required: false
+                type: string
+            first_name:
+                api_name: first_name
+                api_type: string
+                column_name: first_name
+                column_type: string
+                max_length: 20
+                required: false
+                type: string
+            hire_date:
+                api_name: hire_date
+                api_type: date-time
+                column_name: hire_date
+                column_type: date-time
+                required: false
+                type: string
+            last_name:
+                api_name: last_name
+                api_type: string
+                column_name: last_name
+                column_type: string
+                max_length: 20
+                required: false
+                type: string
+            phone:
+                api_name: phone
+                api_type: string
+                column_name: phone
+                column_type: string
+                max_length: 24
+                required: false
+                type: string
+            postal_code:
+                api_name: postal_code
+                api_type: string
+                column_name: postal_code
+                column_type: string
+                max_length: 10
+                required: false
+                type: string
+            reports_to:
+                api_name: reports_to
+                api_type: integer
+                column_name: reports_to
+                column_type: integer
+                required: false
+                type: integer
+            state:
+                api_name: state
+                api_type: string
+                column_name: state
+                column_type: string
+                max_length: 40
+                required: false
+                type: string
+            title:
+                api_name: title
+                api_type: string
+                column_name: title
+                column_type: string
+                max_length: 30
+                required: false
+                type: string
+        relations:
+            employee:
+                api_name: employee
+                parent_property: employee_id
+                schema_name: employee
+                type: object
+            employee_items:
+                api_name: employee_items
+                child_property: employee_id
+                parent_property: employee_id
+                schema_name: employee
+                type: array
+        table_name: employee
+    genre:
+        api_name: genre
+        database: chinook
+        primary_key: genre_id
+        properties:
+            genre_id:
+                api_name: genre_id
+                api_type: integer
+                column_name: genre_id
+                column_type: integer
+                key_type: auto
+                required: false
+                type: integer
+            name:
+                api_name: name
+                api_type: string
+                column_name: name
+                column_type: string
+                max_length: 120
+                required: false
+                type: string
+            version:
+                api_name: version
+                api_type: integer
+                column_name: version
+                column_type: integer
+                required: false
+                type: integer
+        relations:
+            track_items:
+                api_name: track_items
+                child_property: genre_id
+                parent_property: genre_id
+                schema_name: track
+                type: array
+        table_name: genre
+    invoice:
+        api_name: invoice
+        concurrency_property: last_updated
+        database: chinook
+        primary_key: invoice_id
+        properties:
+            billing_address:
+                api_name: billing_address
+                api_type: string
+                column_name: billing_address
+                column_type: string
+                max_length: 70
+                required: false
+                type: string
+            billing_city:
+                api_name: billing_city
+                api_type: string
+                column_name: billing_city
+                column_type: string
+                max_length: 40
+                required: false
+                type: string
+            billing_country:
+                api_name: billing_country
+                api_type: string
+                column_name: billing_country
+                column_type: string
+                max_length: 40
+                required: false
+                type: string
+            billing_postal_code:
+                api_name: billing_postal_code
+                api_type: string
+                column_name: billing_postal_code
+                column_type: string
+                max_length: 10
+                required: false
+                type: string
+            billing_state:
+                api_name: billing_state
+                api_type: string
+                column_name: billing_state
+                column_type: string
+                max_length: 40
+                required: false
+                type: string
+            customer_id:
+                api_name: customer_id
+                api_type: integer
+                column_name: customer_id
+                column_type: integer
+                required: false
+                type: integer
+            invoice_date:
+                api_name: invoice_date
+                api_type: date-time
+                column_name: invoice_date
+                column_type: date-time
+                required: false
+                type: string
+            invoice_id:
+                api_name: invoice_id
+                api_type: integer
+                column_name: invoice_id
+                column_type: integer
+                key_type: auto
+                required: false
+                type: integer
+            last_updated:
+                api_name: last_updated
+                api_type: date-time
+                column_name: last_updated
+                column_type: date-time
+                required: false
+                type: string
+            total:
+                api_name: total
+                api_type: number
+                column_name: total
+                column_type: number
+                required: false
+                type: number
+        relations:
+            customer:
+                api_name: customer
+                parent_property: customer_id
+                schema_name: customer
+                type: object
+            invoice_line_items:
+                api_name: invoice_line_items
+                child_property: invoice_id
+                parent_property: invoice_id
+                schema_name: invoice_line
+                type: array
+        table_name: invoice
+    invoice_line:
+        api_name: invoice_line
+        database: chinook
+        primary_key: invoice_line_id
+        properties:
+            invoice_id:
+                api_name: invoice_id
+                api_type: integer
+                column_name: invoice_id
+                column_type: integer
+                required: false
+                type: integer
+            invoice_line_id:
+                api_name: invoice_line_id
+                api_type: integer
+                column_name: invoice_line_id
+                column_type: integer
+                key_type: auto
+                required: false
+                type: integer
+            quantity:
+                api_name: quantity
+                api_type: integer
+                column_name: quantity
+                column_type: integer
+                required: false
+                type: integer
+            track_id:
+                api_name: track_id
+                api_type: integer
+                column_name: track_id
+                column_type: integer
+                required: false
+                type: integer
+            unit_price:
+                api_name: unit_price
+                api_type: number
+                column_name: unit_price
+                column_type: number
+                required: false
+                type: number
+        relations:
+            invoice:
+                api_name: invoice
+                parent_property: invoice_id
+                schema_name: invoice
+                type: object
+            track:
+                api_name: track
+                parent_property: track_id
+                schema_name: track
+                type: object
+        table_name: invoice_line
+    media_type:
+        api_name: media_type
+        database: chinook
+        primary_key: media_type_id
+        properties:
+            media_type_id:
+                api_name: media_type_id
+                api_type: integer
+                column_name: media_type_id
+                column_type: integer
+                key_type: auto
+                required: false
+                type: integer
+            name:
+                api_name: name
+                api_type: string
+                column_name: name
+                column_type: string
+                max_length: 120
+                required: false
+                type: string
+        relations:
+            track_items:
+                api_name: track_items
+                child_property: media_type_id
+                parent_property: media_type_id
+                schema_name: track
+                type: array
+        table_name: media_type
+    playlist:
+        api_name: playlist
+        database: chinook
+        primary_key: playlist_id
+        properties:
+            name:
+                api_name: name
+                api_type: string
+                column_name: name
+                column_type: string
+                max_length: 120
+                required: false
+                type: string
+            playlist_id:
+                api_name: playlist_id
+                api_type: integer
+                column_name: playlist_id
+                column_type: integer
+                key_type: auto
+                required: false
+                type: integer
+        relations:
+            playlist_track_items:
+                api_name: playlist_track_items
+                child_property: playlist_id
+                parent_property: playlist_id
+                schema_name: playlist_track
+                type: array
+        table_name: playlist
+    playlist_track:
+        api_name: playlist_track
+        database: chinook
+        primary_key: playlist_id
+        properties:
+            playlist_id:
+                api_name: playlist_id
+                api_type: integer
+                column_name: playlist_id
+                column_type: integer
+                key_type: manual
+                required: false
+                type: integer
+            track_id:
+                api_name: track_id
+                api_type: integer
+                column_name: track_id
+                column_type: integer
+                required: false
+                type: integer
+        relations:
+            playlist:
+                api_name: playlist
+                parent_property: playlist_id
+                schema_name: playlist
+                type: object
+            track:
+                api_name: track
+                parent_property: track_id
+                schema_name: track
+                type: object
+        table_name: playlist_track
+    track:
+        api_name: track
+        database: chinook
+        primary_key: track_id
+        properties:
+            album_id:
+                api_name: album_id
+                api_type: integer
+                column_name: album_id
+                column_type: integer
+                required: false
+                type: integer
+            bytes:
+                api_name: bytes
+                api_type: integer
+                column_name: bytes
+                column_type: integer
+                required: false
+                type: integer
+            composer:
+                api_name: composer
+                api_type: string
+                column_name: composer
+                column_type: string
+                max_length: 220
+                required: false
+                type: string
+            genre_id:
+                api_name: genre_id
+                api_type: integer
+                column_name: genre_id
+                column_type: integer
+                required: false
+                type: integer
+            media_type_id:
+                api_name: media_type_id
+                api_type: integer
+                column_name: media_type_id
+                column_type: integer
+                required: false
+                type: integer
+            milliseconds:
+                api_name: milliseconds
+                api_type: integer
+                column_name: milliseconds
+                column_type: integer
+                required: false
+                type: integer
+            name:
+                api_name: name
+                api_type: string
+                column_name: name
+                column_type: string
+                max_length: 200
+                required: false
+                type: string
+            track_id:
+                api_name: track_id
+                api_type: integer
+                column_name: track_id
+                column_type: integer
+                key_type: auto
+                required: false
+                type: integer
+            unit_price:
+                api_name: unit_price
+                api_type: number
+                column_name: unit_price
+                column_type: number
+                required: false
+                type: number
+        relations:
+            album:
+                api_name: album
+                parent_property: album_id
+                schema_name: album
+                type: object
+            genre:
+                api_name: genre
+                parent_property: genre_id
+                schema_name: genre
+                type: object
+            invoice_line_items:
+                api_name: invoice_line_items
+                child_property: track_id
+                parent_property: track_id
+                schema_name: invoice_line
+                type: array
+            media_type:
+                api_name: media_type
+                parent_property: media_type_id
+                schema_name: media_type
+                type: object
+            playlist_track_items:
+                api_name: playlist_track_items
+                child_property: track_id
+                parent_property: track_id
+                schema_name: playlist_track
+                type: array
+        table_name: track

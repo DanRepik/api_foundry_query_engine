@@ -39,25 +39,36 @@ class SQLUpdateSchemaQueryHandler(SQLSchemaQueryHandler):
 
     @property
     def update_values(self) -> str:
-        allowed_properties = self.check_permissions(
+        allowed_property_names = self.check_permissions(
             "write", self.schema_object.permissions, self.schema_object.properties
         )
+        allowed_properties = {
+            k: v
+            for k, v in self.schema_object.properties.items()
+            if k in allowed_property_names
+        }
         self.store_placeholders = {}
         columns = []
         invalid_columns = []
 
+        import json
+
         for name, value in self.operation.store_params.items():
-            if name not in allowed_properties:
+            property = allowed_properties.get(name, None)
+            if property is None:
                 invalid_columns.append(name)
+                continue
+
+            placeholder = (
+                str(property.api_name) if property.api_name is not None else name
+            )
+            column_name = property.column_name
+
+            columns.append(f"{column_name} = {self.placeholder(property, placeholder)}")
+            # Serialize embedded objects to JSON
+            if property.api_type == "object":
+                self.store_placeholders[placeholder] = json.dumps(value)
             else:
-                property = allowed_properties.get(name, None)
-
-                placeholder = property.api_name
-                column_name = property.column_name
-
-                columns.append(
-                    f"{column_name} = {self.placeholder(property, placeholder)}"
-                )
                 self.store_placeholders[placeholder] = property.convert_to_db_value(
                     value
                 )
