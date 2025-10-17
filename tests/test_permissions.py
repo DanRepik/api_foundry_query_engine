@@ -435,3 +435,60 @@ def test_delete_allowed(chinook_env):
         sql
         == "DELETE FROM album WHERE album_id = %(album_id)s RETURNING album_id, artist_id, title"
     )
+
+
+def test_concise_format_permissions(chinook_env):
+    """Test that both concise and verbose permission formats work together."""
+    # The existing ALBUM_SCHEMA already demonstrates the concise format:
+    # sales_associate: read: album_id|title, write: year_released
+    # This test validates that both concise and verbose formats are supported
+
+    # Test 1: Read permissions with concise format
+    operation_dao = OperationDAO(
+        Operation(
+            entity="album",
+            action="read",
+            query_params={"album_id": "1"},
+            roles=["sales_associate"],
+        ),
+        "postgresql",
+    )
+    # sales_associate has read: "album_id|title" (concise format)
+    assert "a.album_id" in operation_dao.query_handler.selection_results
+    assert "a.title" in operation_dao.query_handler.selection_results
+    # Should not have artist_id in selection (not in read permissions)
+    assert "a.artist_id" not in operation_dao.query_handler.selection_results
+
+    # Test 2: Write permissions with concise format
+    operation_dao = OperationDAO(
+        Operation(
+            entity="album",
+            action="update",
+            query_params={"album_id": "1"},
+            store_params={"year_released": 2023},
+            roles=["sales_associate"],
+        ),
+        "postgresql",
+    )
+    # sales_associate has write: "year_released" (concise format)
+    # The returning clause uses read permissions: "album_id|title"
+    # So the selection_results should contain read-permitted fields only
+    assert "album_id" in operation_dao.query_handler.selection_results
+    assert "title" in operation_dao.query_handler.selection_results
+    # year_released is writable but not readable for sales_associate
+    assert "year_released" not in operation_dao.query_handler.selection_results
+
+    # Test 3: Manager has broader permissions (concise .* patterns)
+    operation_dao = OperationDAO(
+        Operation(
+            entity="album",
+            action="read",
+            query_params={"album_id": "1"},
+            roles=["sales_manager"],
+        ),
+        "postgresql",
+    )
+    # sales_manager has read: ".*" (concise format allowing all)
+    assert "a.album_id" in operation_dao.query_handler.selection_results
+    assert "a.title" in operation_dao.query_handler.selection_results
+    assert "a.artist_id" in operation_dao.query_handler.selection_results

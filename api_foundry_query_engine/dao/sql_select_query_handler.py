@@ -33,20 +33,34 @@ class SQLSelectSchemaQueryHandler(SQLSchemaQueryHandler):
         if "default" in perms:
             provider = perms.get("default", {}) or {}
             read_map = provider.get("read", {}) or {}
+            role_permissions = perms.get("default", {})
         else:
             # legacy role-first -> synthesize read map
             read_map = {}
+            role_permissions = perms
             for role, role_perms in perms.items():
                 if isinstance(role_perms, dict):
                     read_map[role] = role_perms.get("read")
 
         filters = []
         for role in self.operation.roles or []:
+            # Check for role-level WHERE clause (hybrid approach)
+            role_where = None
+            if isinstance(role_permissions.get(role), dict):
+                role_where = role_permissions[role].get("where")
+
+            # Check for operation-level WHERE clause
+            operation_where = None
             rule = read_map.get(role)
             if isinstance(rule, dict):
-                where = rule.get("where")
-                if isinstance(where, str) and where.strip():
-                    filters.append(self._template_where(where))
+                operation_where = rule.get("where")
+
+            # Operation-level takes precedence, fallback to role-level
+            where_clause = operation_where if operation_where else role_where
+
+            if isinstance(where_clause, str) and where_clause.strip():
+                filters.append(self._template_where(where_clause))
+
         if not filters:
             return ""
         return "(" + ") OR (".join(filters) + ")"

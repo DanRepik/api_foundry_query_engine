@@ -193,19 +193,42 @@ class SQLQueryHandler:
             log.info(f"role: {role}, role_permissions: {role_permissions}")
             if len(role_permissions) == 0:
                 continue
+
+            # Extract permission patterns for this role
+            read_perm = role_permissions.get("read", "")
+            write_perm = role_permissions.get("write", "")
+            read_pattern = self._extract_permission_pattern(read_perm)
+            write_pattern = self._extract_permission_pattern(write_perm)
+
             for prop_name, property in properties.items():
                 log.info(f"prop_name: {prop_name}, property: {property}")
-                if permission_type == "read" and re.match(
-                    role_permissions.get("read", ""), prop_name
-                ):
+                if permission_type == "read" and re.match(read_pattern, prop_name):
                     allowed_properties[prop_name] = property
-                if permission_type == "write" and re.match(
-                    role_permissions.get("write", ""), prop_name
-                ):
+                if permission_type == "write" and re.match(write_pattern, prop_name):
                     allowed_properties[prop_name] = property
 
         log.info(f"allowed_properties: {allowed_properties}")
         return allowed_properties
+
+    def _extract_permission_pattern(self, permission_rule) -> str:
+        """Extract the regex pattern from a permission rule.
+
+        Args:
+            permission_rule: Can be a string (regex) or dict with
+                'properties'/'fields' key
+
+        Returns:
+            str: The regex pattern to match property names
+        """
+        if isinstance(permission_rule, str):
+            return permission_rule
+        elif isinstance(permission_rule, dict):
+            # Support both 'properties' (preferred) and 'fields' (legacy)
+            return permission_rule.get("properties") or permission_rule.get(
+                "fields", ""
+            )
+        else:
+            return ""
 
     @property
     def selection_results(self) -> Dict:

@@ -19,13 +19,19 @@ The Query Engine is the Lambda-side runtime used by API Foundry. It transforms a
   - `utils/api_model.py` provides the active model (schema objects and relations).
   - `utils/logger.py` and `utils/app_exception.py` for diagnostics and errors.
 
-## Permissions Model (current tests)
-- Simple role → action → fields rules are used in tests:
-  - Example (from tests):
-    - `sales_associate` read: `album_id|title`, write: `year_released`
-    - `sales_manager` read/write all (`.*`), delete: `true`
+## Permissions Model (current implementation)
+- **Structure**: provider → action → role → rule hierarchy with `x-af-permissions`
+- **Formats**:
+  - Concise: `read: "album_id|title"` (direct property regex string)
+  - Verbose: `read: {properties: "regex", where: "condition"}` (object with optional WHERE clause)
+- **Actions**: `read`, `write` (normalized from create/update), `delete`
+- **Row-Level Security**: WHERE clauses with claim templating `${claims.sub}`
+- **Example roles**:
+  - `sales_associate` read: `"album_id|title"`, write: `{properties: "title", where: "artist_id = ${claims.tenant}"}`
+  - `sales_manager` read/write all (`".*"`), delete: `{allow: true}`
 - The `GatewayAdapter` passes roles via JWT claims: `claims.roles` and `claims.subject`.
-- Select handlers reduce returned columns based on the union of allowed fields from roles; insert/update validate writable fields; delete requires an allowed role.
+- Select handlers reduce returned columns based on union of allowed properties from roles; insert/update validate writable properties; delete requires allowed role.
+- Backward compatibility maintained for legacy role-first format
 
 ## Development
 - Python >= 3.9
@@ -43,9 +49,10 @@ The Query Engine is the Lambda-side runtime used by API Foundry. It transforms a
   - See `tests/conftest.py` for `chinook_db` fixture and `Chinook_Postgres.sql`.
 
 ## Test Hints
-- See `tests/test_permissions.py` for expected SQL given roles.
+- See `tests/test_permissions.py` for expected SQL given roles and permission formats.
 - See `tests/test_sql_insert_handler.py`/`test_sql_update_handler.py` for write behavior.
-- `tests/chinook_api.yaml` initializes the active model via `set_api_model`.
+- `tests/chinook_api.yaml` initializes the active model via `set_api_model` and demonstrates both concise and verbose permission formats.
+- Permission tests cover both concise format (`"album_id|title"`) and verbose format (`{properties: "regex", where: "condition"}`).
 
 ## Coding Guidelines
 - Keep SQL handler public APIs stable; update tests if SQL text changes intentionally.
@@ -63,8 +70,9 @@ The Query Engine is the Lambda-side runtime used by API Foundry. It transforms a
 ## Useful Modules to Inspect
 - `adapters/gateway_adapter.py` — event parsing and claims/roles extraction
 - `dao/operation_dao.py` — routing to SQL handlers
-- `dao/sql_select_query_handler.py` — column filtering by role, WHERE building
-- `services/security_service.py` — simple field-level permission checks
+- `dao/sql_select_query_handler.py` — column filtering by role, WHERE building, hybrid security support
+- `dao/sql_query_handler.py` — base handler with permission pattern extraction for both formats
+- `services/security_service.py` — field-level permission checks
 
 ## PR Review Checklist
 - Build and tests pass locally: `pytest -q`
