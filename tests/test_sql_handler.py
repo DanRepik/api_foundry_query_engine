@@ -149,10 +149,12 @@ class TestSQLHandler:
             )
 
             sql_operation = operation_dao.query_handler
-            log.info(f"sql_handler: {sql_operation}")
+            log.info("sql_handler: %s", sql_operation)
 
             log.info(
-                f"sql: {sql_operation.sql}, placeholders: {sql_operation.placeholders}"
+                "sql: %s, placeholders: %s",
+                sql_operation.sql,
+                sql_operation.placeholders,
             )
             assert (
                 sql_operation.sql
@@ -527,3 +529,718 @@ class TestSQLHandler:
 
         select_map = subselect_sql_generator.selection_results
         log.info(f"select_map: {select_map}")
+
+
+@pytest.mark.unit
+class TestTypeConversions:
+    """Tests covering conversion between api_types and column_types."""
+
+    def test_convert_to_db_value_string_types(self):
+        """Test string type conversions from API to database."""
+        # Basic string conversion
+        property_data = {
+            "api_name": "test_field",
+            "column_name": "test_field",
+            "api_type": "string",
+            "column_type": "string",
+        }
+        prop = SchemaObjectProperty(property_data)
+
+        # Test normal string
+        result = prop.convert_to_db_value("test_value")
+        assert result == "test_value"
+
+        # Test None value
+        result = prop.convert_to_db_value(None)  # type: ignore
+        assert result is None
+
+        # Test empty string
+        result = prop.convert_to_db_value("")
+        assert result == ""
+
+    def test_convert_to_db_value_numeric_types(self):
+        """Test numeric type conversions from API to database."""
+        # Integer conversion
+        int_property = SchemaObjectProperty(
+            {
+                "api_name": "test_int",
+                "column_name": "test_int",
+                "api_type": "integer",
+                "column_type": "integer",
+            }
+        )
+
+        result = int_property.convert_to_db_value("42")
+        assert result == 42
+        assert isinstance(result, int)
+
+        result = int_property.convert_to_db_value("0")
+        assert result == 0
+
+        result = int_property.convert_to_db_value("-123")
+        assert result == -123
+
+        # Number/float conversion
+        num_property = SchemaObjectProperty(
+            {
+                "api_name": "test_number",
+                "column_name": "test_number",
+                "api_type": "number",
+                "column_type": "number",
+            }
+        )
+
+        result = num_property.convert_to_db_value("42.5")
+        assert result == 42.5
+        assert isinstance(result, float)
+
+        result = num_property.convert_to_db_value("0.0")
+        assert result == 0.0
+
+        # Float type specifically
+        float_property = SchemaObjectProperty(
+            {
+                "api_name": "test_float",
+                "column_name": "test_float",
+                "api_type": "float",
+                "column_type": "float",
+            }
+        )
+
+        result = float_property.convert_to_db_value("3.14159")
+        assert result == 3.14159
+        assert isinstance(result, float)
+
+    def test_convert_to_db_value_boolean_types(self):
+        """Test boolean type conversions from API to database."""
+        bool_property = SchemaObjectProperty(
+            {
+                "api_name": "test_bool",
+                "column_name": "test_bool",
+                "api_type": "boolean",
+                "column_type": "boolean",
+            }
+        )
+
+        # Test true values
+        result = bool_property.convert_to_db_value("true")
+        assert result is True
+
+        result = bool_property.convert_to_db_value("True")
+        assert result is True
+
+        result = bool_property.convert_to_db_value("TRUE")
+        assert result is True
+
+        # Test false values
+        result = bool_property.convert_to_db_value("false")
+        assert result is False
+
+        result = bool_property.convert_to_db_value("False")
+        assert result is False
+
+        result = bool_property.convert_to_db_value("FALSE")
+        assert result is False
+
+        result = bool_property.convert_to_db_value("anything_else")
+        assert result is False
+
+    def test_convert_to_db_value_boolean_to_integer(self):
+        """Test boolean API type mapping to integer column type."""
+        bool_to_int_property = SchemaObjectProperty(
+            {
+                "api_name": "is_active",
+                "column_name": "is_active",
+                "api_type": "boolean",
+                "column_type": "integer",
+            }
+        )
+
+        # Test true values should convert to 1
+        result = bool_to_int_property.convert_to_db_value("true")
+        assert result == 1
+        assert isinstance(result, int)
+
+        result = bool_to_int_property.convert_to_db_value("True")
+        assert result == 1
+
+        # Test false values should convert to 0
+        result = bool_to_int_property.convert_to_db_value("false")
+        assert result == 0
+        assert isinstance(result, int)
+
+        result = bool_to_int_property.convert_to_db_value("anything_else")
+        assert result == 0
+
+    def test_convert_to_db_value_uuid_types(self):
+        """Test UUID type conversions from API to database."""
+        uuid_property = SchemaObjectProperty(
+            {
+                "api_name": "test_uuid",
+                "column_name": "test_uuid",
+                "api_type": "uuid",
+                "column_type": "uuid",
+            }
+        )
+
+        test_uuid = "550e8400-e29b-41d4-a716-446655440000"
+        result = uuid_property.convert_to_db_value(test_uuid)
+        assert result == test_uuid
+        assert isinstance(result, str)
+
+    def test_convert_to_db_value_flexible_numeric_mappings(self):
+        """Test that numeric types can map to various column types."""
+        test_cases = [
+            # Number API type can map to various numeric column types
+            {
+                "api_type": "number",
+                "column_type": "float",
+                "value": "3.14",
+                "expected": 3.14,
+            },
+            {
+                "api_type": "number",
+                "column_type": "double",
+                "value": "2.718",
+                "expected": 2.718,
+            },
+            {
+                "api_type": "number",
+                "column_type": "numeric",
+                "value": "123.456",
+                "expected": 123.456,
+            },
+            {
+                "api_type": "number",
+                "column_type": "decimal",
+                "value": "99.99",
+                "expected": 99.99,
+            },
+            {
+                "api_type": "number",
+                "column_type": "real",
+                "value": "1.23",
+                "expected": 1.23,
+            },
+            # Integer API type can map to various integer column types
+            {
+                "api_type": "integer",
+                "column_type": "int",
+                "value": "42",
+                "expected": 42,
+            },
+            {
+                "api_type": "integer",
+                "column_type": "bigint",
+                "value": "9223372036854775807",
+                "expected": 9223372036854775807,
+            },
+            {
+                "api_type": "integer",
+                "column_type": "smallint",
+                "value": "32767",
+                "expected": 32767,
+            },
+            {
+                "api_type": "integer",
+                "column_type": "serial",
+                "value": "1",
+                "expected": 1,
+            },
+            {
+                "api_type": "integer",
+                "column_type": "bigserial",
+                "value": "123",
+                "expected": 123,
+            },
+        ]
+
+        for case in test_cases:
+            property_data = {
+                "api_name": "test_field",
+                "column_name": "test_field",
+                "api_type": case["api_type"],
+                "column_type": case["column_type"],
+            }
+            prop = SchemaObjectProperty(property_data)
+            result = prop.convert_to_db_value(case["value"])
+            assert (
+                result == case["expected"]
+            ), f"Failed for {case['api_type']} -> {case['column_type']}: expected {case['expected']}, got {result}"
+
+    def test_convert_to_db_value_flexible_datetime_mappings(self):
+        """Test that datetime types can map to various column types."""
+        test_cases = [
+            {"column_type": "datetime", "value": "2023-12-25T10:30:45"},
+            {"column_type": "timestamp", "value": "2023-12-25T10:30:45"},
+            {"column_type": "timestamptz", "value": "2023-12-25T10:30:45+00:00"},
+        ]
+
+        for case in test_cases:
+            property_data = {
+                "api_name": "test_datetime",
+                "column_name": "test_datetime",
+                "api_type": "date-time",
+                "column_type": case["column_type"],
+            }
+            prop = SchemaObjectProperty(property_data)
+            result = prop.convert_to_db_value(case["value"])
+            assert isinstance(
+                result, datetime
+            ), f"Failed for column_type {case['column_type']}: expected datetime, got {type(result)}"
+
+    def test_convert_to_db_value_flexible_string_mappings(self):
+        """Test that string types can map to various column types."""
+        test_cases = [
+            {"column_type": "varchar", "value": "test string"},
+            {"column_type": "char", "value": "test"},
+            {"column_type": "text", "value": "long text content"},
+        ]
+
+        for case in test_cases:
+            property_data = {
+                "api_name": "test_string",
+                "column_name": "test_string",
+                "api_type": "string",
+                "column_type": case["column_type"],
+            }
+            prop = SchemaObjectProperty(property_data)
+            result = prop.convert_to_db_value(case["value"])
+            assert (
+                result == case["value"]
+            ), f"Failed for column_type {case['column_type']}: expected {case['value']}, got {result}"
+
+    def test_convert_to_db_value_date_types(self):
+        """Test date and datetime type conversions from API to database."""
+        # Date conversion
+        date_property = SchemaObjectProperty(
+            {
+                "api_name": "test_date",
+                "column_name": "test_date",
+                "api_type": "date",
+                "column_type": "date",
+            }
+        )
+
+        result = date_property.convert_to_db_value("2023-12-25")
+        assert result == date(2023, 12, 25)
+        assert isinstance(result, date)
+
+        # Test edge case dates
+        result = date_property.convert_to_db_value("2000-01-01")
+        assert result == date(2000, 1, 1)
+
+        # DateTime conversion
+        datetime_property = SchemaObjectProperty(
+            {
+                "api_name": "test_datetime",
+                "column_name": "test_datetime",
+                "api_type": "date-time",
+                "column_type": "date-time",
+            }
+        )
+
+        result = datetime_property.convert_to_db_value("2023-12-25T10:30:45")
+        assert result == datetime(2023, 12, 25, 10, 30, 45)
+        assert isinstance(result, datetime)
+
+        # Test with timezone
+        result = datetime_property.convert_to_db_value("2023-12-25T10:30:45+00:00")
+        expected = datetime(2023, 12, 25, 10, 30, 45, tzinfo=timezone.utc)
+        assert result == expected
+
+        # Time conversion
+        time_property = SchemaObjectProperty(
+            {
+                "api_name": "test_time",
+                "column_name": "test_time",
+                "api_type": "time",
+                "column_type": "time",
+            }
+        )
+
+        from datetime import time
+
+        result = time_property.convert_to_db_value("14:30:45")
+        assert result == time(14, 30, 45)
+        assert isinstance(result, time)
+
+    def test_convert_to_db_value_null_handling(self):
+        """Test that None values are handled correctly for all types."""
+        test_cases = [
+            {"column_type": "string"},
+            {"column_type": "integer"},
+            {"column_type": "number"},
+            {"column_type": "float"},
+            {"column_type": "boolean"},
+            {"column_type": "date"},
+            {"column_type": "date-time"},
+            {"column_type": "time"},
+        ]
+
+        for case in test_cases:
+            property_data = {
+                "api_name": "test_field",
+                "column_name": "test_field",
+                **case,
+            }
+            prop = SchemaObjectProperty(property_data)
+            result = prop.convert_to_db_value(None)  # type: ignore
+            assert result is None, f"Failed for column_type: {case['column_type']}"
+
+    def test_convert_to_api_value_string_types(self):
+        """Test string type conversions from database to API."""
+        property_data = {
+            "api_name": "test_field",
+            "column_name": "test_field",
+            "api_type": "string",
+            "column_type": "string",
+        }
+        prop = SchemaObjectProperty(property_data)
+
+        result = prop.convert_to_api_value("test_value")
+        assert result == "test_value"
+
+        result = prop.convert_to_api_value(None)
+        assert result is None
+
+    def test_convert_to_api_value_numeric_types(self):
+        """Test numeric type conversions from database to API."""
+        # Integer conversion
+        int_property = SchemaObjectProperty(
+            {
+                "api_name": "test_int",
+                "column_name": "test_int",
+                "api_type": "integer",
+                "column_type": "integer",
+            }
+        )
+
+        result = int_property.convert_to_api_value(42)
+        assert result == 42
+        assert isinstance(result, int)
+
+        # Number conversion
+        num_property = SchemaObjectProperty(
+            {
+                "api_name": "test_number",
+                "column_name": "test_number",
+                "api_type": "number",
+                "column_type": "number",
+            }
+        )
+
+        result = num_property.convert_to_api_value(42.5)
+        assert result == 42.5
+        assert isinstance(result, float)
+
+        # Float conversion
+        float_property = SchemaObjectProperty(
+            {
+                "api_name": "test_float",
+                "column_name": "test_float",
+                "api_type": "float",
+                "column_type": "float",
+            }
+        )
+
+        result = float_property.convert_to_api_value(3.14159)
+        assert result == 3.14159
+        assert isinstance(result, float)
+
+    def test_convert_to_api_value_boolean_types(self):
+        """Test boolean type conversions from database to API."""
+        bool_property = SchemaObjectProperty(
+            {
+                "api_name": "test_bool",
+                "column_name": "test_bool",
+                "api_type": "boolean",
+                "column_type": "boolean",
+            }
+        )
+
+        # Boolean values should be converted to string representation
+        result = bool_property.convert_to_api_value(True)
+        assert result == "True"
+        assert isinstance(result, str)
+
+        result = bool_property.convert_to_api_value(False)
+        assert result == "False"
+        assert isinstance(result, str)
+
+    def test_convert_to_api_value_boolean_from_integer(self):
+        """Test boolean API type handling integer database values."""
+        bool_property = SchemaObjectProperty(
+            {
+                "api_name": "is_active",
+                "column_name": "is_active",
+                "api_type": "boolean",
+                "column_type": "integer",
+            }
+        )
+
+        # Integer 1 should convert to "true"
+        result = bool_property.convert_to_api_value(1)
+        assert result == "true"
+        assert isinstance(result, str)
+
+        # Integer 0 should convert to "false"
+        result = bool_property.convert_to_api_value(0)
+        assert result == "false"
+        assert isinstance(result, str)
+
+        # Any non-zero integer should convert to "true"
+        result = bool_property.convert_to_api_value(42)
+        assert result == "true"
+
+        result = bool_property.convert_to_api_value(-1)
+        assert result == "true"
+
+    def test_convert_to_api_value_uuid_types(self):
+        """Test UUID type conversions from database to API."""
+        uuid_property = SchemaObjectProperty(
+            {
+                "api_name": "test_uuid",
+                "column_name": "test_uuid",
+                "api_type": "uuid",
+                "column_type": "uuid",
+            }
+        )
+
+        test_uuid = "550e8400-e29b-41d4-a716-446655440000"
+        result = uuid_property.convert_to_api_value(test_uuid)
+        assert result == test_uuid
+        assert isinstance(result, str)
+
+    def test_convert_to_api_value_date_types(self):
+        """Test date and datetime type conversions from database to API."""
+        # Date conversion
+        date_property = SchemaObjectProperty(
+            {
+                "api_name": "test_date",
+                "column_name": "test_date",
+                "api_type": "date",
+                "column_type": "date",
+            }
+        )
+
+        test_date = date(2023, 12, 25)
+        result = date_property.convert_to_api_value(test_date)
+        assert result == "2023-12-25"
+        assert isinstance(result, str)
+
+        # DateTime conversion
+        datetime_property = SchemaObjectProperty(
+            {
+                "api_name": "test_datetime",
+                "column_name": "test_datetime",
+                "api_type": "date-time",
+                "column_type": "date-time",
+            }
+        )
+
+        test_datetime = datetime(2023, 12, 25, 10, 30, 45)
+        result = datetime_property.convert_to_api_value(test_datetime)
+        assert result == "2023-12-25T10:30:45"
+        assert isinstance(result, str)
+
+        # DateTime with timezone
+        test_datetime_tz = datetime(2023, 12, 25, 10, 30, 45, tzinfo=timezone.utc)
+        result = datetime_property.convert_to_api_value(test_datetime_tz)
+        assert result == "2023-12-25T10:30:45+00:00"
+
+        # Time conversion
+        time_property = SchemaObjectProperty(
+            {
+                "api_name": "test_time",
+                "column_name": "test_time",
+                "api_type": "time",
+                "column_type": "time",
+            }
+        )
+
+        from datetime import time
+
+        test_time = time(14, 30, 45)
+        result = time_property.convert_to_api_value(test_time)
+        assert result == "14:30:45"
+        assert isinstance(result, str)
+
+    def test_convert_to_api_value_null_handling(self):
+        """Test that None values are handled correctly for all API types."""
+        test_cases = [
+            {"api_type": "string"},
+            {"api_type": "integer"},
+            {"api_type": "number"},
+            {"api_type": "float"},
+            {"api_type": "boolean"},
+            {"api_type": "date"},
+            {"api_type": "date-time"},
+            {"api_type": "time"},
+        ]
+
+        for case in test_cases:
+            property_data = {
+                "api_name": "test_field",
+                "column_name": "test_field",
+                **case,
+            }
+            prop = SchemaObjectProperty(property_data)
+            result = prop.convert_to_api_value(None)  # type: ignore
+            assert result is None, f"Failed for api_type: {case['api_type']}"
+
+    def test_convert_to_db_value_missing_column_type(self):
+        """Test conversion when column_type is not specified (defaults to string)."""
+        property_data = {
+            "api_name": "test_field",
+            "column_name": "test_field",
+            "api_type": "string"
+            # column_type is intentionally missing
+        }
+        prop = SchemaObjectProperty(property_data)
+
+        result = prop.convert_to_db_value("test_value")
+        assert result == "test_value"
+
+    def test_convert_to_api_value_missing_api_type(self):
+        """Test conversion when api_type is not specified (defaults to string)."""
+        property_data = {
+            "api_name": "test_field",
+            "column_name": "test_field",
+            "column_type": "string"
+            # api_type is intentionally missing
+        }
+        prop = SchemaObjectProperty(property_data)
+
+        result = prop.convert_to_api_value("test_value")
+        assert result == "test_value"
+
+    def test_round_trip_conversions(self):
+        """Test that values can be converted from API to DB and back to API."""
+        test_cases = [
+            {
+                "api_type": "string",
+                "column_type": "string",
+                "test_value": "hello world",
+                "expected_db": "hello world",
+                "expected_api": "hello world",
+            },
+            {
+                "api_type": "integer",
+                "column_type": "integer",
+                "test_value": "42",
+                "expected_db": 42,
+                "expected_api": 42,
+            },
+            {
+                "api_type": "number",
+                "column_type": "number",
+                "test_value": "3.14",
+                "expected_db": 3.14,
+                "expected_api": 3.14,
+            },
+            {
+                "api_type": "boolean",
+                "column_type": "boolean",
+                "test_value": "true",
+                "expected_db": True,
+                "expected_api": "True",
+            },
+            {
+                "api_type": "boolean",
+                "column_type": "integer",
+                "test_value": "true",
+                "expected_db": 1,
+                "expected_api": "true",
+            },
+            {
+                "api_type": "date",
+                "column_type": "date",
+                "test_value": "2023-12-25",
+                "expected_db": date(2023, 12, 25),
+                "expected_api": "2023-12-25",
+            },
+            {
+                "api_type": "uuid",
+                "column_type": "uuid",
+                "test_value": "550e8400-e29b-41d4-a716-446655440000",
+                "expected_db": "550e8400-e29b-41d4-a716-446655440000",
+                "expected_api": "550e8400-e29b-41d4-a716-446655440000",
+            },
+        ]
+
+        for case in test_cases:
+            property_data = {
+                "api_name": "test_field",
+                "column_name": "test_field",
+                "api_type": case["api_type"],
+                "column_type": case["column_type"],
+            }
+            prop = SchemaObjectProperty(property_data)
+
+            # Convert API to DB
+            db_value = prop.convert_to_db_value(case["test_value"])
+            assert db_value == case["expected_db"], (
+                f"API->DB conversion failed for {case['api_type']}: "
+                f"expected {case['expected_db']}, got {db_value}"
+            )
+
+            # Convert DB to API
+            api_value = prop.convert_to_api_value(db_value)
+            assert api_value == case["expected_api"], (
+                f"DB->API conversion failed for {case['api_type']}: "
+                f"expected {case['expected_api']}, got {api_value}"
+            )
+
+    def test_edge_case_date_formats(self):
+        """Test edge cases for date format handling."""
+        datetime_property = SchemaObjectProperty(
+            {
+                "api_name": "test_datetime",
+                "column_name": "test_datetime",
+                "api_type": "date-time",
+                "column_type": "date-time",
+            }
+        )
+
+        # Test various ISO format variations
+        test_cases = [
+            "2023-12-25T10:30:45",
+            "2023-12-25T10:30:45.123",
+            "2023-12-25T10:30:45.123456",
+            "2023-12-25T10:30:45+05:30",
+            "2023-12-25T10:30:45-08:00",
+            "2023-12-25T10:30:45Z",
+        ]
+
+        for test_case in test_cases:
+            try:
+                result = datetime_property.convert_to_db_value(test_case)
+                assert isinstance(
+                    result, datetime
+                ), f"Failed to parse datetime: {test_case}"
+            except ValueError as e:
+                pytest.fail(
+                    f"Failed to parse valid datetime format " f"'{test_case}': {e}"
+                )
+
+    def test_api_to_db_type_mismatch_scenarios(self):
+        """Test scenarios where API type and column type differ."""
+        # API expects string but DB stores as integer
+        property_data = {
+            "api_name": "test_field",
+            "column_name": "test_field",
+            "api_type": "string",
+            "column_type": "integer",
+        }
+        prop = SchemaObjectProperty(property_data)
+
+        # The conversion should use column_type for DB conversion
+        result = prop.convert_to_db_value("123")
+        assert result == 123
+        assert isinstance(result, int)
+
+        # And api_type for API conversion
+        result = prop.convert_to_api_value(123)
+        assert result == "123"  # String conversion due to api_type
+        assert isinstance(result, str)

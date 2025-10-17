@@ -67,10 +67,36 @@ class GatewayAdapter(Adapter):
 
         authorizer_info = event.get("requestContext", {}).get("authorizer", {})
         claims = authorizer_info.get("claims", {})
-        roles = claims.get("roles", [])
-        groups = claims.get("groups", [])
+
+        # Decode JSON-encoded arrays from OAuth context
+        roles_raw = claims.get("roles", [])
+        if isinstance(roles_raw, str):
+            try:
+                roles = json.loads(roles_raw)
+            except (json.JSONDecodeError, TypeError):
+                roles = []
+        else:
+            roles = roles_raw if isinstance(roles_raw, list) else []
+
+        groups_raw = claims.get("groups", [])
+        if isinstance(groups_raw, str):
+            try:
+                groups = json.loads(groups_raw)
+            except (json.JSONDecodeError, TypeError):
+                groups = []
+        else:
+            groups = groups_raw if isinstance(groups_raw, list) else []
+
+        permissions_raw = claims.get("permissions", [])
+        if isinstance(permissions_raw, str):
+            try:
+                permissions = json.loads(permissions_raw)
+            except (json.JSONDecodeError, TypeError):
+                permissions = []
+        else:
+            permissions = permissions_raw if isinstance(permissions_raw, list) else []
+
         subject = claims.get("sub")
-        permissions = claims.get("permissions", [])
         scope_str = claims.get("scope")
 
         # Enforce OAuth scopes (simulating API Gateway authorizer behavior)

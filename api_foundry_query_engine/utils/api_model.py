@@ -49,38 +49,117 @@ class SchemaObjectProperty:
     def convert_to_db_value(self, value: str) -> Optional[Any]:
         if value is None:
             return None
-        conversion_mapping = {
-            "string": lambda x: x,
-            "number": float,
-            "float": float,
-            "integer": int,
-            "boolean": lambda x: x.lower() == "true",
-            "date": lambda x: datetime.strptime(x, "%Y-%m-%d").date() if x else None,
-            "date-time": lambda x: datetime.fromisoformat(x) if x else None,
-            "time": lambda x: datetime.strptime(x, "%H:%M:%S").time() if x else None,
-        }
-        conversion_func = conversion_mapping.get(
-            self.column_type if self.column_type is not None else "string", lambda x: x
-        )
-        return conversion_func(value)
+
+        column_type = self.column_type if self.column_type is not None else "string"
+
+        # Handle string types
+        if column_type in ["string", "varchar", "char", "text", "uuid"]:
+            return value
+
+        # Handle numeric types - float/double/numeric variations
+        elif column_type in ["number", "float", "double", "numeric", "decimal", "real"]:
+            return float(value)
+
+        # Handle boolean types - can map to boolean or integer columns
+        elif column_type == "boolean":
+            return value.lower() == "true"
+        elif (
+            column_type in ["int", "integer", "smallint", "bigint"]
+            and hasattr(self, "api_type")
+            and self.api_type == "boolean"
+        ):
+            # Boolean API type mapping to integer column type
+            return 1 if value.lower() == "true" else 0
+
+        # Handle integer types (after boolean check to avoid conflicts)
+        elif column_type in [
+            "integer",
+            "int",
+            "bigint",
+            "smallint",
+            "serial",
+            "bigserial",
+        ]:
+            return int(value)
+
+        # Handle date types
+        elif column_type == "date":
+            return datetime.strptime(value, "%Y-%m-%d").date() if value else None
+
+        # Handle datetime types - various column type names
+        elif column_type in ["date-time", "datetime", "timestamp", "timestamptz"]:
+            return datetime.fromisoformat(value) if value else None
+
+        # Handle time types
+        elif column_type in ["time", "timetz"]:
+            return datetime.strptime(value, "%H:%M:%S").time() if value else None
+
+        # Default to string conversion for unknown types
+        else:
+            return value
 
     def convert_to_api_value(self, value) -> Optional[Any]:
         if value is None:
             return None
-        conversion_mapping = {
-            "string": lambda x: x,
-            "number": float,
-            "float": float,
-            "integer": int,
-            "boolean": str,
-            "date": lambda x: x.date().isoformat() if x else None,
-            "date-time": lambda x: x.isoformat() if x else None,
-            "time": lambda x: x.time().isoformat() if x else None,
-        }
-        conversion_func = conversion_mapping.get(
-            self.api_type if self.api_type is not None else "string", lambda x: x
-        )
-        return conversion_func(value)
+
+        api_type = self.api_type if self.api_type is not None else "string"
+
+        # Handle string types (including UUID which is represented as string in API)
+        if api_type in ["string", "uuid"]:
+            return str(value) if value is not None else None
+
+        # Handle integer type
+        elif api_type == "integer":
+            return int(value) if value is not None else None
+
+        # Handle number and float types
+        elif api_type in ["number", "float"]:
+            return float(value) if value is not None else None
+
+        # Handle boolean type - convert any value to string representation
+        elif api_type == "boolean":
+            if isinstance(value, bool):
+                return str(value)
+            elif isinstance(value, int):
+                # Handle boolean stored as integer (0/1)
+                return "true" if value != 0 else "false"
+            elif isinstance(value, str):
+                return value.lower() in ["true", "1", "yes", "on"]
+            else:
+                return str(bool(value))
+
+        # Handle date type
+        elif api_type == "date":
+            if hasattr(value, "date"):
+                # If it's a datetime, extract the date part
+                return value.date().isoformat()
+            elif hasattr(value, "isoformat"):
+                # If it's already a date
+                return value.isoformat()
+            else:
+                return str(value)
+
+        # Handle datetime type
+        elif api_type == "date-time":
+            if hasattr(value, "isoformat"):
+                return value.isoformat()
+            else:
+                return str(value)
+
+        # Handle time type
+        elif api_type == "time":
+            if hasattr(value, "time"):
+                # If it's a datetime, extract the time part
+                return value.time().isoformat()
+            elif hasattr(value, "isoformat"):
+                # If it's already a time
+                return value.isoformat()
+            else:
+                return str(value)
+
+        # Default to string conversion for unknown types
+        else:
+            return str(value) if value is not None else None
 
 
 class SchemaObjectAssociation:

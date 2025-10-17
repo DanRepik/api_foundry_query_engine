@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 
 class Operation:
@@ -35,10 +35,10 @@ class Operation:
         query_params: Optional[Dict[str, Any]] = None,
         store_params: Optional[Dict[str, Any]] = None,
         metadata_params: Optional[Dict[str, Any]] = None,
-        roles: Optional[Dict[str, Any]] = None,
+        roles: Optional[List[str]] = None,
         scope: Optional[Dict[str, Any]] = None,
-        groups: Optional[Dict[str, Any]] = None,
-        permissions: Optional[Dict[str, Any]] = None,
+        groups: Optional[List[str]] = None,
+        permissions: Optional[List[str]] = None,
         subject: Optional[str] = None,
         claims: Optional[Dict[str, Any]] = None,
     ):
