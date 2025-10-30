@@ -31,7 +31,7 @@ class SQLDeleteSchemaQueryHandler(SQLSchemaQueryHandler):
 
         for role in self.operation.roles:
             role_permissions = self.schema_object.permissions.get(role, {})
-            log.info(f"role: {role}, role_permissions: {role_permissions}")
+            log.info("role: %s, role_permissions: %s", role, role_permissions)
             if len(role_permissions) == 0:
                 continue
             allowed = role_permissions.get("delete", False)

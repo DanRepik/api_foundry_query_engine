@@ -65,38 +65,30 @@ class GatewayAdapter(Adapter):
         if body is not None and len(body) > 0:
             store_params = json.loads(body)
 
-        authorizer_info = event.get("requestContext", {}).get("authorizer", {})
-        claims = authorizer_info.get("claims", {})
+        # Extract JWT claims from API Gateway event
+        claims = event.get("requestContext", {}).get("authorizer", {})
 
-        # Decode JSON-encoded arrays from OAuth context
-        roles_raw = claims.get("roles", [])
-        if isinstance(roles_raw, str):
-            try:
-                roles = json.loads(roles_raw)
-            except (json.JSONDecodeError, TypeError):
-                roles = []
+        # Handle different authorizer types
+        if isinstance(claims, dict):
+            # TOKEN authorizer puts claims directly in authorizer object
+            if "sub" in claims or "iss" in claims:
+                # Already have JWT claims at top level
+                pass
+            elif "claims" in claims:
+                # Some configurations nest claims
+                claims = claims["claims"]
+            elif "iam" in claims:
+                # IAM authorizer fallback
+                claims = claims["iam"]
+            elif "lambda" in claims:
+                # Lambda authorizer fallback
+                claims = claims["lambda"]
+            else:
+                # Empty or unknown format
+                claims = {}
         else:
-            roles = roles_raw if isinstance(roles_raw, list) else []
-
-        groups_raw = claims.get("groups", [])
-        if isinstance(groups_raw, str):
-            try:
-                groups = json.loads(groups_raw)
-            except (json.JSONDecodeError, TypeError):
-                groups = []
-        else:
-            groups = groups_raw if isinstance(groups_raw, list) else []
-
-        permissions_raw = claims.get("permissions", [])
-        if isinstance(permissions_raw, str):
-            try:
-                permissions = json.loads(permissions_raw)
-            except (json.JSONDecodeError, TypeError):
-                permissions = []
-        else:
-            permissions = permissions_raw if isinstance(permissions_raw, list) else []
-
-        subject = claims.get("sub")
+            # Non-dict authorizer context
+            claims = {}
         scope_str = claims.get("scope")
 
         # Enforce OAuth scopes (simulating API Gateway authorizer behavior)
@@ -132,10 +124,6 @@ class GatewayAdapter(Adapter):
             store_params=store_params,
             query_params=query_params,
             metadata_params=metadata_params,
-            roles=roles,
-            groups=groups,
-            subject=subject,
-            permissions=permissions,
             claims=claims,
         )
 

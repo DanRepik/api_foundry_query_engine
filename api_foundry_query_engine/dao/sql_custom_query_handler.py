@@ -39,7 +39,7 @@ class SQLCustomQueryHandler(SQLQueryHandler):
             self._selection_results = self.check_permissions(
                 "read", self.path_operation.permissions, self.path_operation.outputs
             )
-            log.debug(f"selection_results: {self._selection_results}")
+            log.debug("selection_results: %s", self._selection_results)
         return self._selection_results
 
     def _compile(self):

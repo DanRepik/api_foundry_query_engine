@@ -198,7 +198,7 @@ def test_read_some_restrictions(chinook_env):
             entity="album",
             action="read",
             query_params={"album_id": "24"},
-            roles=["sales_associate"],
+            claims={"roles": ["sales_associate"]},
         ),
         "postgres",
     )
@@ -222,7 +222,7 @@ def test_read_no_restrictions(chinook_env):
             entity="album",
             action="read",
             query_params={"album_id": "24"},
-            roles=["sales_manager"],
+            claims={"roles": ["sales_manager"]},
         ),
         "postgres",
     )
@@ -247,7 +247,7 @@ def test_read_all_restricted(chinook_env):
             entity="album",
             action="read",
             query_params={"album_id": "24"},
-            roles=["customer_agent"],
+            claims={"roles": ["customer_agent"]},
         ),
         "postgres",
     )
@@ -279,7 +279,7 @@ def test_read_relation_some_restrictions(chinook_env):
             action="read",
             query_params={"invoice_id": "24"},
             metadata_params={"properties": ".* invoice_line_items:.*"},
-            roles={"sales_associate": True},
+            claims={"roles": ["sales_associate"]},
         ),
         "postgres",
     )
@@ -307,7 +307,7 @@ def test_create_prohibited_property(chinook_env):
             entity="album",
             action="create",
             store_params={"title": "something different"},
-            roles=["sales_associate"],
+            claims={"roles": ["sales_associate"]},
         ),
         "postgres",
     )
@@ -329,7 +329,7 @@ def test_create_allowed_property(chinook_env):
             entity="album",
             action="create",
             store_params={"title": "new title"},
-            roles=["sales_manager"],
+            claims={"roles": ["sales_manager"]},
         ),
         "postgres",
     )
@@ -353,7 +353,7 @@ def test_update_prohibited_property(chinook_env):
             action="update",
             query_params={"album_id": "24"},
             store_params={"title": "something different"},
-            roles=["sales_associate"],
+            claims={"roles": ["sales_associate"]},
         ),
         "postgres",
     )
@@ -379,7 +379,7 @@ def test_update_allowed_property(chinook_env):
             action="update",
             query_params={"album_id": "24"},
             store_params={"title": "2024"},
-            roles=["sales_manager"],
+            claims={"roles": ["sales_manager"]},
         ),
         "postgres",
     )
@@ -402,7 +402,7 @@ def test_delete_prohibited(chinook_env):
             entity="album",
             action="delete",
             query_params={"album_id": 5},
-            roles=["sales_associate"],
+            claims={"roles": ["sales_associate"]},
         ),
         "postgres",
     )
@@ -424,7 +424,7 @@ def test_delete_allowed(chinook_env):
             entity="album",
             action="delete",
             query_params={"album_id": 5},
-            roles=["sales_manager"],
+            claims={"roles": ["sales_manager"]},
         ),
         "postgres",
     )
@@ -449,7 +449,7 @@ def test_concise_format_permissions(chinook_env):
             entity="album",
             action="read",
             query_params={"album_id": "1"},
-            roles=["sales_associate"],
+            claims={"roles": ["sales_associate"]},
         ),
         "postgresql",
     )
@@ -466,7 +466,7 @@ def test_concise_format_permissions(chinook_env):
             action="update",
             query_params={"album_id": "1"},
             store_params={"year_released": 2023},
-            roles=["sales_associate"],
+            claims={"roles": ["sales_associate"]},
         ),
         "postgresql",
     )
@@ -484,7 +484,7 @@ def test_concise_format_permissions(chinook_env):
             entity="album",
             action="read",
             query_params={"album_id": "1"},
-            roles=["sales_manager"],
+            claims={"roles": ["sales_manager"]},
         ),
         "postgresql",
     )

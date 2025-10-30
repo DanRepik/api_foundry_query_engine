@@ -187,10 +187,15 @@ class SQLQueryHandler:
             return properties
 
         allowed_properties = {}
+        log.info(
+            "Input properties keys: %s",
+            list(properties.keys()) if properties else "None",
+        )
+        log.info("Operation roles: %s", self.operation.roles)
 
         for role in self.operation.roles:
             role_permissions = permissions.get(role, {})
-            log.info(f"role: {role}, role_permissions: {role_permissions}")
+            log.info("role: %s, role_permissions: %s", role, role_permissions)
             if len(role_permissions) == 0:
                 continue
 
@@ -201,13 +206,13 @@ class SQLQueryHandler:
             write_pattern = self._extract_permission_pattern(write_perm)
 
             for prop_name, property in properties.items():
-                log.info(f"prop_name: {prop_name}, property: {property}")
+                log.info("prop_name: %s, property: %s", prop_name, property)
                 if permission_type == "read" and re.match(read_pattern, prop_name):
                     allowed_properties[prop_name] = property
                 if permission_type == "write" and re.match(write_pattern, prop_name):
                     allowed_properties[prop_name] = property
 
-        log.info(f"allowed_properties: {allowed_properties}")
+        log.info("allowed_properties: %s", allowed_properties)
         return allowed_properties
 
     def _extract_permission_pattern(self, permission_rule) -> str:
@@ -381,7 +386,7 @@ class SQLSchemaQueryHandler(SQLQueryHandler):
         """
         log.info("selection_result")
         if not hasattr(self, "__selection_results"):
-            log.info(f"prefix_map: {self.prefix_map}")
+            log.info("prefix_map: %s", self.prefix_map)
             filters = self.operation.metadata_params.get("_properties", ".*").split()
             allowed_properties = self.check_permissions(
                 "read", self.schema_object.permissions, self.schema_object.properties

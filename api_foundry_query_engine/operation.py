@@ -1,5 +1,9 @@
 from typing import Any, Dict, List, Optional
 
+from api_foundry_query_engine.utils.logger import logger
+
+logger = logger(__name__)
+
 
 class Operation:
     """
@@ -35,11 +39,6 @@ class Operation:
         query_params: Optional[Dict[str, Any]] = None,
         store_params: Optional[Dict[str, Any]] = None,
         metadata_params: Optional[Dict[str, Any]] = None,
-        roles: Optional[List[str]] = None,
-        scope: Optional[Dict[str, Any]] = None,
-        groups: Optional[List[str]] = None,
-        permissions: Optional[List[str]] = None,
-        subject: Optional[str] = None,
         claims: Optional[Dict[str, Any]] = None,
     ):
         """
@@ -76,12 +75,30 @@ class Operation:
         self.metadata_params = metadata_params or {}
 
         # Roles defining the context in which the operation is allowed.
-        self.scope = scope or {}
-        self.roles = roles or []
-        self.groups = groups or []
-        self.permissions = permissions or []
+        self.claims = claims or {}
 
-        self.subject = subject
-        # Full set of claims (when available). Used for row-level filters
-        # like where: "id = ${claims.sub}".
-        self.claims = claims or ({"sub": subject} if subject is not None else {})
+        # Log the operation for debugging and audit purposes
+        logger.info(
+            "Operation created: entity=%s, action=%s, "
+            "query_params=%s, store_params=%s, "
+            "metadata_params=%s, claims=%s",
+            self.entity,
+            self.action,
+            self.query_params,
+            self.store_params,
+            self.metadata_params,
+            self.claims,
+        )
+
+    @property
+    def roles(self) -> List[str]:
+        """Get the roles from claims."""
+        return self.claims.get("roles", []) if self.claims else []
+
+    def subject(self) -> Optional[str]:
+        """Get the subject from claims."""
+        return self.claims.get("sub") if self.claims else None
+
+    def groups(self) -> List[str]:
+        """Get the groups from claims."""
+        return self.claims.get("groups", []) if self.claims else []

@@ -1,62 +1,36 @@
 # API Foundry Query Engine
 
-The **API Foundry Query Engine** is the serverless runtime component that powers API Foundry's REST APIs. It runs as an AWS Lambda function and transforms HTTP requests from API Gateway into structured database operations, enforcing permissions and schema validation along the way.
+The **API Foundry Query Engine** is a serverless runtime engine that powers API Foundry's REST APIs. It runs as an AWS Lambda function behind API Gateway, transforming HTTP requests into secure, optimized database operations based on OpenAPI specifications with custom `x-af-*` extensions.
 
-## Overview
+## Key Features
 
-The Query Engine serves as the bridge between REST API requests and relational database operations. It parses incoming API Gateway events, applies security rules, generates optimized SQL queries, and returns properly formatted JSON responses.
-
-### Key Features
-
-- **Request Processing**: Transforms API Gateway events into structured `Operation` objects
-- **Security Enforcement**: Role-based access control (RBAC) with field-level and row-level permissions
-- **SQL Generation**: Dynamic SQL creation for CRUD operations and custom queries
-- **Schema Validation**: Type checking and constraint enforcement based on OpenAPI specifications
+- **Specification-Driven**: Auto-generates CRUD operations from OpenAPI schemas with `x-af-database` extensions
+- **Advanced Security**: Multi-level authorization with JWT validation, RBAC, and SQL-level permission enforcement
+- **Sophisticated RBAC**: Field-level and row-level permissions with claim templating for multi-tenant scenarios
+- **SQL Generation**: Dynamic, optimized SQL creation with parameterized queries and permission filtering
 - **Multi-Database Support**: PostgreSQL, MySQL, and Oracle compatibility
-- **Optimistic Concurrency**: Built-in support for version-based record locking
-- **Association Handling**: Automatic loading of related objects and collections
+- **Association Handling**: Automatic loading of related objects via `x-af-parent-property` and `x-af-child-property`
 
 ## Architecture
 
 ```
-API Gateway Event → Adapters → Services → DAO → SQL Handlers → Database
-                       ↓           ↓        ↓
-                   Security    Validation  Query
-                   Context     Pipeline    Generation
+HTTP Request → JWT Decoder → Gateway Adapter → Services → DAO → SQL Handlers → Database
+     ↓              ↓              ↓            ↓       ↓         ↓
+API Gateway    Token Claims    Operation     Business  Query    Optimized
+   Event      Authentication   Object        Logic    Routing   SQL + Params
 ```
 
-### Core Components
+## Quick Start
 
-#### Entry Point
-- **`lambda_handler.py`**: AWS Lambda entry point and QueryEngine class
+```python
+from api_foundry_query_engine.utils.token_decoder import token_decoder
 
-#### Data Model
-- **`operation.py`**: Central `Operation` class representing parsed requests
+@token_decoder(require_authentication=False)  # Optional - use when no upstream JWT validation
+def lambda_handler(event, context):
+    return query_engine.process(event)
+```
 
-#### Adapters
-- **`GatewayAdapter`**: Parses API Gateway events and builds `Operation` objects
-- **`CaseChangeAdapter`**: Normalizes field naming conventions
-- **`SecurityAdapter`**: Reserved for security-oriented transformations
-
-#### Services
-- **`Service`**: Main processing pipeline that orchestrates adapters and handlers
-- **`TransactionalService`**: Wraps operations in database transactions when needed
-
-#### Data Access Layer (DAO)
-- **`OperationDAO`**: Routes operations to appropriate SQL handlers
-- **SQL Handlers**: Generate database-specific SQL and parameters
-  - `sql_select_query_handler.py`: SELECT operations with filtering and joins
-  - `sql_insert_query_handler.py`: INSERT operations with validation
-  - `sql_update_query_handler.py`: UPDATE operations with concurrency control
-  - `sql_delete_query_handler.py`: DELETE operations with permission checks
-  - `sql_custom_query_handler.py`: Custom SQL execution
-
-#### Utilities
-- **`api_model.py`**: Active schema and relationship definitions
-- **`logger.py`**: Structured logging utilities
-- **`app_exception.py`**: Custom exception handling
-
-## Installation
+## Installation & Setup
 
 ### Prerequisites
 
@@ -64,86 +38,163 @@ API Gateway Event → Adapters → Services → DAO → SQL Handlers → Databas
 - AWS Lambda environment (for deployment)
 - Compatible database (PostgreSQL, MySQL, or Oracle)
 
-### Development Setup
+### Installation
 
 ```bash
-# Clone the repository
-git clone https://github.com/DanRepik/api-foundry-query-engine.git
-cd api-foundry-query-engine
-
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
-pip install -e ".[dev]"
+pip install api-foundry-query-engine
 ```
 
-## Usage
-
-### Basic Lambda Handler
+### Basic Configuration
 
 ```python
-from api_foundry_query_engine.lambda_handler import QueryEngine
-
-# Configuration from environment variables
-config = {
-    "db_secret_name": "my-database-secret",
-    "api_model": "path/to/openapi-spec.yaml"
-}
-
-# Create query engine instance
-engine = QueryEngine(config)
-
-# AWS Lambda handler function
-def lambda_handler(event, context):
-    return engine.handler(event)
+# Environment variables
+export DB_SECRET_NAME="arn:aws:secretsmanager:us-east-1:123:secret:db-credentials"
+export JWKS_HOST="oauth.company.com"  # Optional - only if using JWT decoder
+export JWT_ISSUER="https://oauth.company.com/"
+export JWT_ALLOWED_AUDIENCES="api.company.com"
 ```
 
-### Direct Operation Processing
+## API Specification Handling
 
+The Query Engine is driven by OpenAPI specifications enhanced with custom `x-af-*` extensions.
+
+### Specification Loading
+
+**Primary Method - Deployment Package:**
 ```python
-from api_foundry_query_engine.operation import Operation
-from api_foundry_query_engine.services.service import Service
-from api_foundry_query_engine.dao.operation_dao import OperationDAO
-
-# Create operation
-operation = Operation(
-    entity="album",
-    action="read",
-    query_params={"artist_id": "1"},
-    roles={"sales_associate": ["read"]}
-)
-
-# Process operation
-service = Service(OperationDAO())
-result = service.execute(operation)
+# Specification embedded in Lambda deployment package
+api_model = APIModel(yaml.safe_load(open("/var/task/api_spec.yaml")))
 ```
 
-## Permissions System
+**Alternative - Environment Variable:**
+```bash
+export API_SPEC='{"openapi": "3.1.0", "components": {"schemas": {...}}}'
+```
 
-The Query Engine implements a sophisticated Role-Based Access Control (RBAC) system supporting both simple field-level permissions and advanced row-level security.
+### Key Extensions
 
-### Permission Structure
+| Extension | Purpose | Example |
+|-----------|---------|---------|
+| `x-af-database` | Database connection name (schema-level) | `chinook` |
+| `x-af-primary-key` | Primary key strategy (property-level) | `auto`, `manual`, `uuid` |
+| `x-af-concurrency-control` | Optimistic locking field (property-level) | `version`, `timestamp` |
+| `x-af-permissions` | Role-based access control (schema-level) | See permissions section |
+
+### Schema Object Structure
 
 ```yaml
-x-af-permissions:
-  <provider>:          # Token validator (typically "default")
-    <action>:          # read, write, delete
-      <role>:          # User role from JWT claims
-        <rule>         # Permission rule
+components:
+  schemas:
+    album:
+      type: object
+      x-af-database: chinook              # Schema-level: database connection
+      x-af-permissions:                   # Schema-level: access control
+        default:
+          read:
+            user: "id|title|artist_id"
+            admin: ".*"
+      properties:
+        album_id:
+          type: integer
+          x-af-primary-key: auto          # Property-level: primary key strategy
+        title:
+          type: string
+        artist_id:
+          type: integer
+        updated_at:
+          type: string
+          format: date-time
+          x-af-concurrency-control: version  # Property-level: optimistic locking
 ```
 
-### Concise Format
+### Relationship Definitions
 
-For simple field-level permissions without row filtering:
+Parent-child relationships are defined within the OpenAPI specification as properties with special `x-af-*` attributes:
 
+```yaml
+# OpenAPI schema definitions with relationship properties
+components:
+  schemas:
+    customer:
+      type: object
+      x-af-database: chinook
+      properties:
+        customer_id:
+          type: integer
+          x-af-primary-key: auto
+        invoices:                        # Child relationship property
+          description: A list of the customers invoices
+          type: array
+          x-af-child-property: customer_id
+          items:
+            $ref: '#/components/schemas/invoice'
+
+    invoice:
+      type: object
+      x-af-database: chinook
+      properties:
+        invoice_id:
+          type: integer
+          x-af-primary-key: auto
+        customer_id:
+          type: integer
+        customer:                        # Parent relationship property
+          description: The customer for this invoice
+          x-af-parent-property: customer_id
+          $ref: '#/components/schemas/customer'
+```
+
+## Authentication & Authorization
+
+### JWT Token Decoder (Optional)
+
+The token decoder is **optional** - use only when there's no upstream JWT validation. If no `jwks_url` is configured (either directly or via `JWKS_HOST` environment variable), the decoder does nothing and processing continues normally.
+
+#### When to Use Token Decoder:
+- Direct Lambda invocation without API Gateway JWT authorizer
+- Development/testing environments
+- Custom authentication flows
+
+#### When to Skip:
+- API Gateway JWT Authorizer handles validation upstream
+- Lambda Authorizer provides pre-validated claims
+- Public endpoints requiring no authentication
+- No `jwks_url` configured (decoder becomes pass-through)
+
+```python
+# With token decoder - explicit configuration
+@token_decoder(
+    jwks_url="https://oauth.company.com/.well-known/jwks.json",
+    audience="api.company.com",
+    issuer="https://oauth.company.com/"
+)
+def handler(event, context):
+    return query_engine.process(event)
+
+# With token decoder - environment variable configuration
+@token_decoder()  # Uses JWKS_HOST, JWT_ISSUER, JWT_ALLOWED_AUDIENCES env vars
+def handler_with_env_config(event, context):
+    return query_engine.process(event)
+
+# Without token decoder (API Gateway handles JWT)
+def handler(event, context):
+    # Claims already in event['requestContext']['authorizer']
+    return query_engine.process(event)
+```
+
+### Permission System
+
+The Query Engine implements sophisticated RBAC with field-level and row-level security.
+
+#### Permission Formats
+
+**Concise Format (Field-Level Only):**
 ```yaml
 x-af-permissions:
   default:
     read:
-      sales_associate: "album_id|title|artist_id"
-      sales_manager: ".*"
+      sales_associate: "album_id|title|artist_id"  # Regex pattern
+      sales_manager: ".*"                          # All fields
     write:
       sales_associate: "title"
       sales_manager: ".*"
@@ -151,316 +202,260 @@ x-af-permissions:
       sales_manager: true
 ```
 
-### Verbose Format with Row-Level Security
-
-For advanced permissions with WHERE clause filtering:
-
+**Verbose Format (Row-Level Security):**
 ```yaml
 x-af-permissions:
   default:
     read:
       user:
         properties: "^(id|email|name)$"
-        where: "user_id = ${claims.sub}"
+        where: "user_id = ${claims.sub}"           # Claim templating
       admin:
         properties: ".*"
     write:
       user:
         properties: "^(email|name)$"
         where: "user_id = ${claims.sub}"
-    delete:
-      admin:
-        allow: true
 ```
 
-### Claim Templating
+#### Claim Templating
 
-WHERE clauses support JWT claim substitution:
+WHERE clauses support dynamic JWT claim substitution:
 
-- `${claims.sub}`: Subject (user ID)
-- `${claims.tenant_id}`: Multi-tenant isolation
-- `${claims.department}`: Department-based filtering
+```yaml
+# Multi-tenant isolation
+where: "tenant_id = ${claims.tenant_id}"
 
-## Development
+# Department-based access
+where: "department = ${claims.department}"
 
-### Running Tests
-
-```bash
-# Unit tests only (no database required)
-pytest -q -m unit
-
-# Integration tests (requires PostgreSQL)
-pytest -q -m integration
-
-# All tests
-pytest -q
-
-# With coverage
-pytest --cov=api_foundry_query_engine --cov-report=html
+# Complex conditions
+where: "(owner_id = ${claims.sub}) OR (${claims.roles[0]} = 'admin')"
 ```
 
-### Test Database Setup
+#### Multi-Level Security
 
-Integration tests use the Chinook sample database. The `fixture_foundry` package automatically provisions a PostgreSQL container and loads test data.
+1. **JWT Token Validation**: Signature, expiration, issuer, audience
+2. **Scope/Permission Checking**: OAuth scopes and fine-grained permissions
+3. **SQL-Level Enforcement**: Field filtering and row-level WHERE clauses
 
+## Operation Model & SQL Generation
+
+### Operation Structure
+
+Operations contain these key components:
+- **Entity**: Target schema object (e.g., "album")
+- **Action**: CRUD action ("read", "create", "update", "delete")
+- **Query Parameters**: Selection/filtering criteria
+- **Store Parameters**: Data to store/update
+- **Metadata Parameters**: Processing instructions (__sort, __limit, etc.)
+- **Claims**: JWT claims and user context
+
+### Parameter Types
+
+#### Query Parameters
 ```python
-# Example test
-@pytest.mark.integration
-def test_album_selection(chinook_db):
-    # Test uses real database with Chinook data
-    pass
+# GET /album?artist_id=1&title=like::Dark*&__sort=title:asc
+operation = Operation(
+    entity="album",
+    action="read",
+    query_params={"artist_id": "1", "title": "like::Dark*"},
+    metadata_params={"__sort": "title:asc", "__limit": "10"}
+)
 ```
 
-### Code Style
+#### Query Operators
+| Operator | SQL | Example |
+|----------|-----|---------|
+| `eq::value` | `= value` | `id=eq::123` |
+| `ne::value` | `<> value` | `status=ne::inactive` |
+| `lt::value` | `< value` | `price=lt::50` |
+| `le::value` | `<= value` | `price=le::100` |
+| `gt::value` | `> value` | `price=gt::100` |
+| `ge::value` | `>= value` | `price=ge::50` |
+| `in::val1,val2` | `IN (val1,val2)` | `genre=in::Rock,Pop` |
+| `not-in::val1,val2` | `NOT IN (val1,val2)` | `status=not-in::draft,deleted` |
+| `between::val1,val2` | `BETWEEN val1 AND val2` | `price=between::10,50` |
+| `not-between::val1,val2` | `NOT BETWEEN val1 AND val2` | `price=not-between::10,50` |
 
-```bash
-# Format code
-black api_foundry_query_engine tests
+**Note**: NULL values are handled automatically by the system. When a field is null in the database, equality comparisons will return appropriate results without requiring special null operators.
 
-# Sort imports
-isort api_foundry_query_engine tests
-
-# Pre-commit hooks
-pre-commit install
-```
-
-## Configuration
-
-### Environment Variables
-
-- **`DB_SECRET_NAME`**: AWS Secrets Manager secret containing database credentials
-- **`API_MODEL_S3_BUCKET`**: S3 bucket containing OpenAPI specification
-- **`API_MODEL_S3_KEY`**: S3 key for OpenAPI specification file
-- **`LOG_LEVEL`**: Logging level (DEBUG, INFO, WARNING, ERROR)
-
-### Database Secret Format
-
-```json
-{
-  "engine": "postgres",
-  "host": "localhost",
-  "port": 5432,
-  "database": "mydb",
-  "username": "user",
-  "password": "password"
-}
-```
-
-## API Reference
-
-### Operation Class
-
-The central data structure representing a parsed request:
-
+#### Store Parameters
 ```python
-class Operation:
-    entity: str              # Target schema object (e.g., "album")
-    action: str              # CRUD action ("create", "read", "update", "delete")
-    query_params: dict       # Selection criteria
-    store_params: dict       # Data to store/update
-    metadata_params: dict    # Processing instructions (__properties, __sort, etc.)
-    roles: dict             # User roles and permissions
-```
-
-### SQL Handler Interface
-
-All SQL handlers implement a common interface:
-
-```python
-class SqlQueryHandler:
-    def generate_sql(self, operation: Operation) -> tuple[str, list]:
-        """Generate SQL query and parameters"""
-        pass
-
-    def execute(self, operation: Operation) -> list[dict]:
-        """Execute operation and return results"""
-        pass
-```
-
-## Examples
-
-### Basic CRUD Operations
-
-```python
-# Create album
+# POST /album
 operation = Operation(
     entity="album",
     action="create",
-    store_params={"title": "New Album", "artist_id": 1}
-)
-
-# Read albums by artist
-operation = Operation(
-    entity="album",
-    action="read",
-    query_params={"artist_id": 1}
-)
-
-# Update album with concurrency control
-operation = Operation(
-    entity="album",
-    action="update",
-    query_params={"album_id": 1, "version": "2023-10-17T10:00:00Z"},
-    store_params={"title": "Updated Title"}
-)
-
-# Delete album
-operation = Operation(
-    entity="album",
-    action="delete",
-    query_params={"album_id": 1}
+    store_params={
+        "title": "New Album",
+        "artist_id": 42,
+        "release_date": "2023-10-15"
+    }
 )
 ```
 
-### Advanced Queries
+#### Metadata Parameters
+| Parameter | Purpose | Example |
+|-----------|---------|---------|
+| `__sort` | ORDER BY clause | `title:asc,created_date:desc` |
+| `__limit` | LIMIT clause | `10` |
+| `__offset` | OFFSET clause | `20` |
+| `__properties` | Column selection | `title,artist_id` |
+| `__include` | Association loading | `artist,tracks` |
+
+### SQL Generation Process
+
+1. **Handler Selection**: Routes to appropriate SQL handler based on action/entity
+2. **Permission Filtering**: Applies field-level and row-level security
+3. **Query Building**: Generates parameterized SQL with proper JOINs
+4. **Parameter Binding**: Safely substitutes parameters to prevent SQL injection
+
+## Configuration Reference
+
+### Environment Variables
+
+#### Database Configuration
+```bash
+# Required
+export DB_SECRET_NAME="arn:aws:secretsmanager:region:account:secret:name"
+
+# Optional
+export DB_ENGINE="postgresql"        # postgresql, mysql, oracle
+export DB_SCHEMA="public"           # Database schema name
+```
+
+#### JWT Configuration (Optional - only if using token decoder)
+```bash
+# Required for JWT validation
+export JWKS_HOST="oauth.company.com"
+export JWT_ISSUER="https://oauth.company.com/"
+export JWT_ALLOWED_AUDIENCES="api.company.com,mobile.company.com"
+
+# Optional
+export REQUIRE_AUTHENTICATION="true"  # Set to false for development
+export JWT_ALGORITHMS="RS256,ES256"   # Comma-separated
+```
+
+#### Application Settings
+```bash
+export LOG_LEVEL="INFO"              # DEBUG, INFO, WARN, ERROR
+export ENABLE_CORS="true"            # Enable CORS headers
+export DEFAULT_PAGE_SIZE="50"        # Default limit for queries
+```
+
+### OAuth Provider Examples
+
+#### Auth0
+```bash
+export JWKS_HOST="your-domain.auth0.com"
+export JWT_ISSUER="https://your-domain.auth0.com/"
+export JWT_ALLOWED_AUDIENCES="your-api-identifier"
+```
+
+#### AWS Cognito
+```bash
+export JWKS_HOST="cognito-idp.us-east-1.amazonaws.com"
+export JWT_ISSUER="https://cognito-idp.us-east-1.amazonaws.com/us-east-1_XXXXXXXXX"
+export JWT_ALLOWED_AUDIENCES="your-cognito-app-client-id"
+```
+
+#### Custom OAuth Server
+```bash
+export JWKS_HOST="oauth.company.com"
+export JWT_ISSUER="https://oauth.company.com/"
+export JWT_ALLOWED_AUDIENCES="api.company.com"
+```
+
+### Performance Considerations
+
+- **Connection Pooling**: Reuses database connections within Lambda containers
+- **Schema Caching**: API specifications cached in Lambda memory
+- **Parameterized Queries**: Prevents SQL injection and enables query plan caching
+- **Column Selection**: Only selects authorized fields to reduce network traffic
+
+## Examples & Troubleshooting
+
+### CRUD Operations
 
 ```python
-# Select with filtering and sorting
-operation = Operation(
-    entity="invoice",
-    action="read",
-    query_params={
-        "total": "gt::10.00",  # Greater than $10
-        "billing_country": "USA"
-    },
-    metadata_params={
-        "__sort": "invoice_date:desc",
-        "__limit": "50",
-        "__properties": "invoice_id total billing_.*"
-    }
-)
+# Create
+Operation(entity="album", action="create", store_params={
+    "title": "New Album", "artist_id": 42
+})
 
-# Association loading
-operation = Operation(
-    entity="invoice",
-    action="read",
-    query_params={"customer_id": 1},
-    metadata_params={
-        "__properties": ".* customer:.* invoice_line_items:.*"
-    }
-)
+# Read (with filtering and sorting)
+Operation(entity="album", action="read",
+    query_params={"artist_id": "1"},
+    metadata_params={"__sort": "title:asc", "__limit": "10"})
+
+# Update
+Operation(entity="album", action="update",
+    query_params={"album_id": "123"},
+    store_params={"title": "Updated Title"})
+
+# Delete
+Operation(entity="album", action="delete",
+    query_params={"album_id": "123"})
 ```
 
-## Error Handling
+### Common Errors & Solutions
 
-The Query Engine provides detailed error responses:
+#### Permission Denied
+```yaml
+# Problem: User role has no read permissions
+x-af-permissions:
+  default:
+    write:
+      user: ".*"    # Can write but not read
 
-```python
-try:
-    result = service.execute(operation)
-except ApplicationException as e:
-    # User-facing validation errors
-    return {
-        "statusCode": 400,
-        "body": {"error": str(e)}
-    }
-except Exception as e:
-    # System errors
-    return {
-        "statusCode": 500,
-        "body": {"error": "Internal server error"}
-    }
+# Solution: Add read permissions
+x-af-permissions:
+  default:
+    read:
+      user: "id|name|email"
+    write:
+      user: ".*"
 ```
 
-Common error scenarios:
+#### JWT Validation Failed
+```bash
+# Check configuration
+export LOG_LEVEL="DEBUG"
 
-- **400 Bad Request**: Invalid query parameters, malformed data
-- **401 Unauthorized**: Missing or invalid JWT token
-- **403 Forbidden**: Insufficient permissions for operation
-- **404 Not Found**: Entity or record not found
-- **409 Conflict**: Concurrency control violation
-- **422 Unprocessable Entity**: Schema validation failure
+# Common issues:
+# - Wrong JWKS_HOST or JWT_ISSUER
+# - Token expired or invalid signature
+# - Audience mismatch
+```
 
-## Performance Considerations
+#### Empty Results with Row-Level Security
+```yaml
+# Problem: Claim types don't match database types
+where: "owner_id = ${claims.sub}"  # claims.sub = "user-123" (string)
+# But database owner_id is integer
 
-### Query Optimization
+# Solution: Use appropriate claim or cast
+where: "owner_id = ${claims.user_id}"  # Use numeric claim
+```
 
-- **Column Selection**: Only fetch columns allowed by permissions
-- **Index Usage**: Generate SQL that leverages database indexes
-- **Join Optimization**: Efficient joins for association loading
-- **Parameterized Queries**: Prevent SQL injection and enable query plan caching
-
-### Connection Management
-
-- **Connection Pooling**: Reuse database connections across requests
-- **Lazy Loading**: Connect to database only when needed
-- **Connection Limits**: Respect database connection limits in Lambda
-
-### Caching
-
-- **Schema Caching**: Cache parsed OpenAPI specifications
-- **Connection Caching**: Reuse connection objects within Lambda container
-
-## Deployment
-
-### AWS Lambda Package
-
-The Query Engine is designed for serverless deployment:
+### Debug Logging
 
 ```bash
-# Build deployment package
-python -m build
+export LOG_LEVEL="DEBUG"
 
-# Upload to AWS Lambda
-aws lambda create-function \
-  --function-name api-foundry-query-engine \
-  --runtime python3.9 \
-  --handler lambda_handler.lambda_handler \
-  --zip-file fileb://dist/api_foundry_query_engine-*.whl
+# Produces logs showing:
+# - Permission patterns matched
+# - Generated SQL with parameters
+# - JWT token validation steps
+# - Claims populated in event context
 ```
 
-### Integration with API Foundry
+### Best Practices
 
-The Query Engine is typically deployed as part of a complete API Foundry stack:
-
-```python
-from api_foundry import APIFoundry
-
-api = APIFoundry(
-    "my-api",
-    api_spec="./openapi.yaml",
-    secrets={"chinook": "arn:aws:secretsmanager:..."}
-)
-```
-
-## Contributing
-
-### Development Workflow
-
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/new-feature`
-3. Make changes and add tests
-4. Run the test suite: `pytest`
-5. Commit changes: `git commit -am 'Add new feature'`
-6. Push to branch: `git push origin feature/new-feature`
-7. Submit a pull request
-
-### Coding Guidelines
-
-- **Test Coverage**: Maintain >90% test coverage
-- **Type Hints**: Use type annotations for all public APIs
-- **Documentation**: Update docstrings and README for new features
-- **Error Handling**: Provide clear error messages for validation failures
-- **Performance**: Profile and optimize database queries
-
-### Testing Guidelines
-
-- **Unit Tests**: Mock external dependencies (database, AWS services)
-- **Integration Tests**: Use real database with test data
-- **Permission Tests**: Verify security rules work correctly
-- **Performance Tests**: Validate query execution times
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Related Projects
-
-- **[API Foundry](https://github.com/DanRepik/api-foundry)**: Main project for deploying APIs
-- **[Fixture Foundry](https://github.com/DanRepik/fixture-foundry)**: Test infrastructure and database fixtures
-
-## Support
-
-- **Documentation**: [API Foundry Documentation](https://github.com/DanRepik/api-foundry)
-- **Issues**: [GitHub Issues](https://github.com/DanRepik/api-foundry-query-engine/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/DanRepik/api-foundry-query-engine/discussions)
+1. **Use API Gateway JWT authorizers** when possible instead of token decoder
+2. **Apply principle of least privilege** in permission definitions
+3. **Use row-level security** for multi-tenant applications
+4. **Monitor database connections** to avoid exhausting connection pools
+5. **Cache frequently accessed reference data** in Lambda memory
+6. **Use parameterized queries** to prevent SQL injection
+7. **Test permissions thoroughly** with different user roles and scenarios

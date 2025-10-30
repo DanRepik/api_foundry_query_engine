@@ -68,6 +68,6 @@ class Adapter(metaclass=abc.ABCMeta):
         operation = self.unmarshal(event)
 
         result = self.service.execute(operation)
-        log.debug(f"adapter result: {result}")
+        log.debug("adapter result: %s", result)
 
         return self.marshal(result)

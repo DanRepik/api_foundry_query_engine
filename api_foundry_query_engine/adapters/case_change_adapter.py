@@ -30,7 +30,7 @@ class CaseChangeAdapter(Adapter):
             or self.__check_camel_case(operation.store_params)
             or self.__check_camel_case(operation.query_params)
         )
-        log.info(f"camel_case: {self.camel_case}")
+        log.info("camel_case: %s", self.camel_case)
 
         if self.camel_case:
             return Operation(

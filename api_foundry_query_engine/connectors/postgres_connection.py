@@ -27,7 +27,7 @@ class PostgresCursor(Cursor):
         """
         from psycopg2 import Error, IntegrityError, ProgrammingError
 
-        log.info(f"sql: {sql}")
+        log.info("sql: %s", sql)
 
         try:
             # Execute the SQL statement with parameters

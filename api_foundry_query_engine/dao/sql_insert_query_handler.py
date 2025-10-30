@@ -78,7 +78,7 @@ class SQLInsertSchemaQueryHandler(SQLSchemaQueryHandler):
             for k, v in self.schema_object.properties.items()
             if k in allowed_property_names
         }
-        log.info(f"allowed properties: {allowed_properties}")
+        log.info("allowed properties: %s", allowed_properties)
 
         import json
 

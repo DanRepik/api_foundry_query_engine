@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "api-foundry-query-engine"
-version = "0.8.30"
+version = "0.8.31"
 authors = [
     { name="Daniel Repik", email="danrepik@icloud.com" },
 ]
@@ -25,7 +25,8 @@ dev = [
     "pytest-cov>=4.0.0",
     "black>=23.0.0",
     "isort>=5.12.0",
-    "fixture_foundry>=0.1.0"
+    "fixture_foundry>=0.1.0",
+    "simple-oauth-server"
 ]
 
 [project.urls]
@@ -45,6 +46,7 @@ dependencies = [
     "black>=23.0.0",
     "isort>=5.12.0",
     "fixture_foundry>=0.1.0",
+    "simple-oauth-server",
     ]
 
 [project.scripts]
@@ -54,3 +56,37 @@ markers = [
     "unit: marks tests as unit tests that do not require a database",
     "integration: marks tests that operate on a real database",
 ]
+
+[tool.hatch.version]
+path = "api_foundry_query_engine/__init__.py"
+
+[tool.hatch.envs.default]
+dependencies = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0.0",
+]
+
+[tool.hatch.envs.default.scripts]
+test = "pytest {args:tests}"
+test-cov = "pytest --cov=api_foundry_query_engine --cov-report=term-missing {args:tests}"
+lint = [
+    "black --check --diff .",
+    "isort --check-only --diff .",
+]
+fmt = [
+    "black .",
+    "isort .",
+]
+
+[tool.hatch.envs.docs]
+dependencies = [
+    "mkdocs",
+    "mkdocs-material",
+]
+
+[tool.hatch.envs.docs.scripts]
+build = "mkdocs build --clean --strict"
+serve = "mkdocs serve --dev-addr localhost:8000"
+
+[tool.hatch.publish.index]
+disable = ["test"]  # Disable test index by default for safety

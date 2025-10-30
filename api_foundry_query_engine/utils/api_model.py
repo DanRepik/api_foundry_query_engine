@@ -289,7 +289,7 @@ class APIModel:
     """Class to load and expose the API configuration as objects."""
 
     def __init__(self, config: Dict[str, Any]):
-        print("building api_model")
+        log.info("building api_model")
         self.schema_objects = {
             name: SchemaObject(schema_data)
             for name, schema_data in config.get("schema_objects", {}).items()
@@ -323,4 +323,4 @@ def set_api_model(engine_config: Mapping[str, str]):
                 os.environ.get("API_SPEC", "/var/task/api_spec.yaml"), "r"
             ) as file:
                 api_model = APIModel(yaml.safe_load(file))
-        log.info(f"Loaded API model: {api_model}")
+        log.info("Loaded API model: %s", api_model)

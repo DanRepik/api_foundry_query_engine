@@ -1,12 +1,15 @@
 import json
 import logging
 import os
-from typing import Optional, Mapping, Any
+from typing import Mapping, Any
 
 from api_foundry_query_engine.utils.api_model import set_api_model
 from api_foundry_query_engine.utils.app_exception import ApplicationException
 from api_foundry_query_engine.adapters.gateway_adapter import GatewayAdapter
+from api_foundry_query_engine.utils.token_decoder import token_decoder
+from api_foundry_query_engine.utils.claims_check import claims_check
 
+logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
 log = logging.getLogger(__name__)
 
 
@@ -44,15 +47,13 @@ class QueryEngine:
             }
 
 
-engine_config: Optional[Mapping[str, str]] = None
-query_engine: Optional[QueryEngine] = None
-
-
+@token_decoder()
+@claims_check()
 def handler(event, _):
     if not hasattr(handler, "engine_config"):
         log.info("Loading engine config from environment variables")
         handler.engine_config = os.environ
-        log.info(f"engine_config: {handler.engine_config}")
+        log.info("engine_config: %s", handler.engine_config)
 
     if not hasattr(handler, "query_engine"):
         set_api_model(handler.engine_config)

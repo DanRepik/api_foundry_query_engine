@@ -45,8 +45,8 @@ class TransactionalService(ServiceAdapter):
                 return [result]
             return result
         except Exception as error:
-            log.error(f"transaction exception: {error}")
-            log.error(f"traceback: {traceback.format_exc()}")
+            log.error("transaction exception: %s", error)
+            log.error("traceback: %s", traceback.format_exc())
             raise error
         finally:
             connection.close()
