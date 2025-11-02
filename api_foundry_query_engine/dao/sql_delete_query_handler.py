@@ -29,12 +29,28 @@ class SQLDeleteSchemaQueryHandler(SQLSchemaQueryHandler):
         if not self.schema_object.permissions:
             return True
 
+        # Use the proper provider-action-role structure
+        provider_permissions = self.schema_object.permissions.get("default", {})
+        delete_permissions = provider_permissions.get("delete", {})
+
         for role in self.operation.roles:
-            role_permissions = self.schema_object.permissions.get(role, {})
+            role_permissions = delete_permissions.get(role)
             log.info("role: %s, role_permissions: %s", role, role_permissions)
-            if len(role_permissions) == 0:
-                continue
-            allowed = role_permissions.get("delete", False)
+
+            # If no permissions found for role, check wildcard "*"
+            if role_permissions is None:
+                role_permissions = delete_permissions.get("*")
+                log.info("Fallback to wildcard role '*': %s", role_permissions)
+                if role_permissions is None:
+                    continue
+
+            # Handle both boolean and object permission formats
+            if isinstance(role_permissions, bool):
+                allowed = role_permissions
+            else:
+                # For complex permission objects, existence means allowed
+                allowed = True
+
             if allowed:
                 return True
 

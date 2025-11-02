@@ -193,27 +193,70 @@ class SQLQueryHandler:
         )
         log.info("Operation roles: %s", self.operation.roles)
 
+        # Permissions structure: {provider: {action: {role: rule}}}
+        # Use 'default' as the standard provider
+        provider_permissions = permissions.get("default", {})
+        action_permissions = provider_permissions.get(permission_type, {})
+
+        log.info(
+            "Extracted action permissions for %s: %s",
+            permission_type,
+            action_permissions,
+        )
+
         for role in self.operation.roles:
-            role_permissions = permissions.get(role, {})
+            role_permissions = action_permissions.get(role, {})
             log.info("role: %s, role_permissions: %s", role, role_permissions)
-            if len(role_permissions) == 0:
-                continue
 
-            # Extract permission patterns for this role
-            read_perm = role_permissions.get("read", "")
-            write_perm = role_permissions.get("write", "")
-            read_pattern = self._extract_permission_pattern(read_perm)
-            write_pattern = self._extract_permission_pattern(write_perm)
+            # If no permissions found for specific role, check wildcard "*"
+            if not role_permissions:
+                role_permissions = action_permissions.get("*", {})
+                log.info("Fallback to wildcard role '*': %s", role_permissions)
+                if not role_permissions:
+                    continue
 
-            for prop_name, property in properties.items():
-                log.info("prop_name: %s, property: %s", prop_name, property)
-                if permission_type == "read" and re.match(read_pattern, prop_name):
-                    allowed_properties[prop_name] = property
-                if permission_type == "write" and re.match(write_pattern, prop_name):
-                    allowed_properties[prop_name] = property
+            # Extract permission pattern from the rule
+            regex_pattern = self._extract_permission_pattern(role_permissions)
+
+            if regex_pattern:
+                # Use efficient regex dictionary filtering
+                role_allowed = self._filter_properties_by_regex(
+                    properties, regex_pattern
+                )
+                log.info(
+                    "role: %s, pattern: %s, matched: %s",
+                    role,
+                    regex_pattern,
+                    list(role_allowed.keys()),
+                )
+
+                # Merge with existing allowed properties
+                allowed_properties.update(role_allowed)
 
         log.info("allowed_properties: %s", allowed_properties)
         return allowed_properties
+
+    def _filter_properties_by_regex(
+        self, properties: Dict[str, SchemaObjectProperty], regex_pattern: str
+    ) -> Dict[str, SchemaObjectProperty]:
+        """Filter dictionary properties using a regex pattern.
+
+        Args:
+            properties: Dictionary of property name -> SchemaObjectProperty
+            regex_pattern: Regex pattern to match property names
+
+        Returns:
+            Dict[str, SchemaObjectProperty]: Filtered properties dict
+        """
+        if not regex_pattern:
+            return {}
+
+        try:
+            compiled_regex = re.compile(regex_pattern)
+            return {k: v for k, v in properties.items() if compiled_regex.match(k)}
+        except re.error as e:
+            log.warning("Invalid regex pattern '%s': %s", regex_pattern, e)
+            return {}
 
     def _extract_permission_pattern(self, permission_rule) -> str:
         """Extract the regex pattern from a permission rule.

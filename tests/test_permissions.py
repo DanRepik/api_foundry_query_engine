@@ -12,13 +12,15 @@ schema_objects:
         api_name: album
         database: chinook
         permissions:
-            sales_associate:
-                read: album_id|title
-                write: year_released
-            sales_manager:
-                delete: true
-                read: .*
-                write: .*
+            default:
+                read:
+                    sales_associate: album_id|title
+                    sales_manager: .*
+                write:
+                    sales_associate: year_released
+                    sales_manager: .*
+                delete:
+                    sales_manager: true
         primary_key: album_id
         properties:
             album_id:
