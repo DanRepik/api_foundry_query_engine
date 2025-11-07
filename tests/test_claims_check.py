@@ -7,6 +7,8 @@ from api_foundry_query_engine.utils.claims_check import (
     claims_check,
     requires_read_scope,
     requires_write_scope,
+    requires_read_access,
+    requires_authentication,
     _extract_claims,
     _extract_operation_type,
     _extract_entity_from_path,
@@ -184,9 +186,9 @@ class TestClaimsCheck:
         assert result2["statusCode"] == 200
 
     def test_no_claims_error(self):
-        """Test error when no claims are present."""
+        """Test error when no claims are present and authentication is required."""
 
-        @claims_check(required_scopes=["read:*"])
+        @claims_check(require_authentication=True, required_scopes=["read:*"])
         def test_handler(event, context):
             return {"statusCode": 200}
 
@@ -201,17 +203,30 @@ class TestClaimsCheck:
 def example_lambda_handler():
     """
     Example of how to use the claims_check decorator in a Lambda function.
+
+    These examples demonstrate different ways to use claims_check:
+    1. Auto-validate path scope (default behavior)
+    2. Require specific scopes
+    3. Check entity-specific permissions
+    4. Use convenience decorators
     """
     from api_foundry_query_engine.utils.token_decoder import token_decoder
 
-    # Example 1: Check for specific scopes
+    # Example 1: Auto-validate scope matches path (default behavior)
     @token_decoder()
-    @claims_check(required_scopes=["read:*"], operation_type="read")
+    @claims_check()  # GET /album needs read:album scope
     def read_albums_handler(event, context):
-        # Your business logic here
+        """Handler that auto-validates scope based on path and HTTP method."""
         return {"statusCode": 200, "body": "Albums retrieved successfully"}
 
-    # Example 2: Check for entity-specific permissions
+    # Example 2: Check for specific scopes
+    @token_decoder()
+    @claims_check(required_scopes=["read:*"])
+    def read_any_handler(event, context):
+        """Handler that requires read:* wildcard scope."""
+        return {"statusCode": 200, "body": "Resource retrieved successfully"}
+
+    # Example 3: Check for entity-specific permissions
     @token_decoder()
     @claims_check(
         required_scopes=["write:album"],
@@ -220,19 +235,36 @@ def example_lambda_handler():
         entity_name="album",
     )
     def create_album_handler(event, context):
-        # Your business logic here
+        """Handler that requires both scope and permission."""
         return {"statusCode": 201, "body": "Album created successfully"}
 
-    # Example 3: Use convenience decorators
+    # Example 4: Use convenience decorators for minimum access level
     @token_decoder()
-    @requires_read_scope("customer")
-    def read_customers_handler(event, context):
-        # Your business logic here
-        return {"statusCode": 200, "body": "Customers retrieved successfully"}
+    @requires_read_access()
+    def read_resource_handler(event, context):
+        """Handler that requires at least read-level access."""
+        return {"statusCode": 200, "body": "Resource retrieved successfully"}
 
-    # Example 4: Auto-extract entity from path
+    # Example 5: Require authentication only
     @token_decoder()
-    @requires_write_scope(extract_from_path=True)
-    def update_entity_handler(event, context):
-        # Entity will be auto-extracted from path like /api/album/123
-        return {"statusCode": 200, "body": "Entity updated successfully"}
+    @requires_authentication()
+    def authenticated_handler(event, context):
+        """Handler that only requires valid authentication."""
+        return {"statusCode": 200, "body": "Authenticated successfully"}
+
+    # Example 6: Skip path validation but require minimum level
+    @token_decoder()
+    @claims_check(validate_path_scope=False, min_scope_level="write")
+    def admin_handler(event, context):
+        """Handler that requires write-level without validating specific path."""
+        return {"statusCode": 200, "body": "Admin operation successful"}
+
+    # Return the handlers for demonstration
+    return {
+        "read_albums": read_albums_handler,
+        "read_any": read_any_handler,
+        "create_album": create_album_handler,
+        "read_resource": read_resource_handler,
+        "authenticated": authenticated_handler,
+        "admin": admin_handler,
+    }

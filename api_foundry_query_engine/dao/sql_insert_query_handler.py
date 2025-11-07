@@ -82,6 +82,15 @@ class SQLInsertSchemaQueryHandler(SQLSchemaQueryHandler):
 
         import json
 
+        # First, validate that user is not trying to set injected properties
+        for property_name, property in self.schema_object.properties.items():
+            if property.inject_value and property_name in self.operation.store_params:
+                raise ApplicationException(
+                    403,
+                    f"Property '{property_name}' is auto-injected and "
+                    + "cannot be set manually",
+                )
+
         for name, value in self.operation.store_params.items():
             parts = name.split(".")
 
@@ -114,6 +123,25 @@ class SQLInsertSchemaQueryHandler(SQLSchemaQueryHandler):
                 self.store_placeholders[
                     property.api_name
                 ] = property.convert_to_db_value(value)
+
+        # Inject values from claims/timestamps/etc for properties with
+        # x-af-inject-value on CREATE
+        for property_name, property in self.schema_object.properties.items():
+            if property.inject_value and "create" in property.inject_on:
+                injected_value = self.extract_injected_value(property.inject_value)
+                if injected_value is not None:
+                    placeholder_key = f"__inject_{property_name}"
+                    columns.append(property.column_name)
+                    placeholders.append(self.placeholder(property, placeholder_key))
+                    self.store_placeholders[
+                        placeholder_key
+                    ] = property.convert_to_db_value(injected_value)
+                elif property.required:
+                    raise ApplicationException(
+                        400,
+                        f"Required injected property '{property_name}' "
+                        + f"could not be populated from '{property.inject_value}'",
+                    )
 
         if self.key_property:
             if self.key_property.key_type == "sequence":

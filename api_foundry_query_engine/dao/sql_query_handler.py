@@ -193,9 +193,12 @@ class SQLQueryHandler:
         )
         log.info("Operation roles: %s", self.operation.roles)
 
+        # Normalize permissions to provider-first format if needed
+        normalized_permissions = self._normalize_permissions(permissions)
+
         # Permissions structure: {provider: {action: {role: rule}}}
         # Use 'default' as the standard provider
-        provider_permissions = permissions.get("default", {})
+        provider_permissions = normalized_permissions.get("default", {})
         action_permissions = provider_permissions.get(permission_type, {})
 
         log.info(
@@ -235,6 +238,61 @@ class SQLQueryHandler:
 
         log.info("allowed_properties: %s", allowed_properties)
         return allowed_properties
+
+    def _normalize_permissions(self, permissions: dict) -> dict:
+        """
+        Normalize permissions from legacy role-first format to provider-first format.
+
+        Legacy format: {role: {action: rule}}
+        New format: {provider: {action: {role: rule}}}
+
+        Args:
+            permissions: Raw permissions dictionary
+
+        Returns:
+            Normalized permissions in provider-first format
+        """
+        if not permissions or not isinstance(permissions, dict):
+            return {}
+
+        # Check if already in new format (has 'default' or other provider keys)
+        if "default" in permissions:
+            return permissions
+
+        # Check if this is legacy format: role -> action -> rule
+        is_legacy = False
+        for key, value in permissions.items():
+            if isinstance(value, dict):
+                # Check if value contains action keys
+                for action_key in value.keys():
+                    if action_key in {"read", "write", "delete", "create", "update"}:
+                        is_legacy = True
+                        break
+            if is_legacy:
+                break
+
+        if not is_legacy:
+            # Assume it's already in provider format
+            return permissions
+
+        # Convert legacy format to new format
+        normalized = {"default": {"read": {}, "write": {}, "delete": {}}}
+
+        for role, actions in permissions.items():
+            if not isinstance(actions, dict):
+                continue
+
+            for action, rule in actions.items():
+                # Normalize action names: create/update -> write
+                normalized_action = (
+                    "write" if action in ("create", "update") else action
+                )
+
+                if normalized_action in normalized["default"]:
+                    normalized["default"][normalized_action][role] = rule
+
+        log.info("Normalized legacy permissions: %s -> %s", permissions, normalized)
+        return normalized
 
     def _filter_properties_by_regex(
         self, properties: Dict[str, SchemaObjectProperty], regex_pattern: str
@@ -355,6 +413,40 @@ class SQLQueryHandler:
         sql_condition = self.generate_sql_condition(property, value, prefix)
         placeholders = self.generate_placeholders(property, value, prefix)
         return sql_condition, placeholders
+
+    def extract_injected_value(self, inject_value_source: str):
+        """
+        Extract value from various sources for property injection.
+
+        Args:
+            inject_value_source: Source specification (e.g., "claim:sub",
+                "timestamp", "uuid", "env:VAR_NAME")
+
+        Returns:
+            The extracted value, or None if source not found
+
+        Raises:
+            ApplicationException: If source format is invalid
+        """
+        import os
+        import uuid
+
+        if inject_value_source.startswith("claim:"):
+            claim_key = inject_value_source[6:]
+            return self.operation.claims.get(claim_key)
+        elif inject_value_source == "timestamp":
+            return datetime.utcnow().isoformat()
+        elif inject_value_source == "date":
+            return date.today().isoformat()
+        elif inject_value_source == "uuid":
+            return str(uuid.uuid4())
+        elif inject_value_source.startswith("env:"):
+            env_key = inject_value_source[4:]
+            return os.environ.get(env_key)
+        else:
+            raise ApplicationException(
+                400, f"Unknown inject value source: {inject_value_source}"
+            )
 
 
 class SQLSchemaQueryHandler(SQLQueryHandler):

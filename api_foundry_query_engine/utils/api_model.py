@@ -42,6 +42,8 @@ class SchemaObjectProperty:
         self.key_type = data.get("key_type")
         self.sequence_name = data.get("sequence_name")
         self.concurrency_control = data.get("concurrency_control")
+        self.inject_value = data.get("inject_value")
+        self.inject_on = data.get("inject_on", [])
 
     def __repr__(self):
         return f"SchemaObjectProperty(api_name={self.api_name}, column_name={self.column_name}, type={self.type})"
