@@ -2,7 +2,7 @@ import os
 import yaml
 
 from datetime import datetime
-from typing import Any, Dict, Mapping, Optional
+from typing import Any, Dict, List, Mapping, Optional
 
 from api_foundry_query_engine.utils.logger import logger
 
@@ -44,6 +44,7 @@ class SchemaObjectProperty:
         self.concurrency_control = data.get("concurrency_control")
         self.inject_value = data.get("inject_value")
         self.inject_on = data.get("inject_on", [])
+        self.soft_delete = data.get("x-af-soft-delete") or data.get("soft_delete")
 
     def __repr__(self):
         return f"SchemaObjectProperty(api_name={self.api_name}, column_name={self.column_name}, type={self.type})"
@@ -99,6 +100,20 @@ class SchemaObjectProperty:
         # Default to string conversion for unknown types
         else:
             return value
+
+    def is_soft_delete_field(self) -> bool:
+        """Check if this property is configured for soft delete."""
+        return self.soft_delete is not None
+
+    def get_soft_delete_strategy(self) -> str:
+        """Get the soft delete strategy for this property."""
+        if not self.soft_delete:
+            return "none"
+        return self.soft_delete.get("strategy", "none")
+
+    def get_soft_delete_config(self) -> Dict[str, Any]:
+        """Get the complete soft delete configuration."""
+        return self.soft_delete or {}
 
     def convert_to_api_value(self, value) -> Optional[Any]:
         if value is None:
@@ -263,6 +278,39 @@ class SchemaObject:
     @property
     def primary_key(self):
         return self.properties.get(self._primary_key)
+
+    def has_soft_delete_support(self) -> bool:
+        """Check if this schema object supports soft delete operations."""
+        return len(self.get_soft_delete_properties()) > 0
+
+    def get_soft_delete_properties(self) -> Dict[str, SchemaObjectProperty]:
+        """Get all properties configured for soft delete filtering."""
+        return {
+            name: prop
+            for name, prop in self.properties.items()
+            if prop.is_soft_delete_field()
+            and prop.get_soft_delete_strategy()
+            in ["null_check", "boolean_flag", "exclude_values"]
+        }
+
+    def get_soft_delete_audit_properties(
+        self,
+    ) -> Dict[str, SchemaObjectProperty]:
+        """Get properties used for soft delete audit trails."""
+        return {
+            name: prop
+            for name, prop in self.properties.items()
+            if prop.is_soft_delete_field()
+            and prop.get_soft_delete_strategy() == "audit_field"
+        }
+
+    def get_soft_delete_strategies(self) -> List[str]:
+        """Get list of all soft delete strategies used in this schema."""
+        strategies = set()
+        for prop in self.properties.values():
+            if prop.is_soft_delete_field():
+                strategies.add(prop.get_soft_delete_strategy())
+        return list(strategies)
 
 
 class PathOperation:

@@ -531,10 +531,109 @@ class SQLSchemaQueryHandler(SQLQueryHandler):
             )
         return self.__selection_results
 
+    def _has_soft_delete_conflicts(self) -> Dict[str, bool]:
+        """
+        Detect conflicts between query parameters and soft delete exclusions.
+
+        Returns dict mapping property names to whether they have conflicts.
+        A conflict occurs when a query explicitly requests values that would
+        be filtered out by soft delete rules.
+        """
+        conflicts = {}
+        soft_delete_props = self.schema_object.get_soft_delete_properties()
+
+        for prop_name, prop in soft_delete_props.items():
+            strategy = prop.get_soft_delete_strategy()
+            config = prop.get_soft_delete_config()
+
+            # Check if this property is queried
+            query_value = self.operation.query_params.get(prop_name)
+            if not query_value:
+                conflicts[prop_name] = False
+                continue
+
+            has_conflict = False
+
+            if strategy == "exclude_values":
+                excluded_values = config.get("values", [])
+                # Check if query value matches any excluded value
+                if isinstance(query_value, list):
+                    # Handle IN queries: ?status=archived,deleted
+                    has_conflict = any(val in excluded_values for val in query_value)
+                else:
+                    # Handle single value: ?status=archived
+                    has_conflict = query_value in excluded_values
+
+            elif strategy == "boolean_flag":
+                active_value = config.get("active_value", True)
+                # Conflict if explicitly querying for inactive value
+                if isinstance(query_value, str):
+                    # Convert string to boolean for comparison
+                    query_bool = query_value.lower() in ("true", "1", "yes")
+                    has_conflict = query_bool != active_value
+                elif isinstance(query_value, bool):
+                    has_conflict = query_value != active_value
+
+            elif strategy == "null_check":
+                # Conflict if explicitly querying for null/None values
+                # This might be "null", "none", empty string, etc.
+                if isinstance(query_value, str):
+                    has_conflict = query_value.lower() in ("null", "none", "")
+                else:
+                    has_conflict = query_value is None
+
+            conflicts[prop_name] = has_conflict
+
+        return conflicts
+
+    def _soft_delete_where_clause(self) -> str:
+        """
+        Generate WHERE clause to filter out soft-deleted records.
+
+        Uses smart conflict detection - if query explicitly requests
+        soft-deleted values, those filters are skipped to allow access.
+        """
+        conditions = []
+
+        soft_delete_props = self.schema_object.get_soft_delete_properties()
+        conflicts = self._has_soft_delete_conflicts()
+
+        for prop_name, prop in soft_delete_props.items():
+            # Skip filtering if user explicitly queries for soft-deleted values
+            if conflicts.get(prop_name, False):
+                continue
+
+            strategy = prop.get_soft_delete_strategy()
+            config = prop.get_soft_delete_config()
+            column_name = prop.column_name
+
+            if strategy == "null_check":
+                conditions.append(f"{column_name} IS NULL")
+            elif strategy == "boolean_flag":
+                active_value = config.get("active_value", True)
+                conditions.append(f"{column_name} = {active_value}")
+            elif strategy == "exclude_values":
+                excluded_values = config.get("values", [])
+                if excluded_values:
+                    # Format values for SQL IN clause
+                    formatted_values = ", ".join(
+                        f"'{val}'" if isinstance(val, str) else str(val)
+                        for val in excluded_values
+                    )
+                    conditions.append(f"{column_name} NOT IN ({formatted_values})")
+
+        return " AND ".join(conditions) if conditions else ""
+
     @property
     def search_condition(self) -> str:
         self.search_placeholders = {}
         conditions = []
+
+        # Add soft delete filtering first
+        soft_delete_filter = self._soft_delete_where_clause()
+        if soft_delete_filter:
+            conditions.append(soft_delete_filter)
+
         for name, value in self.operation.query_params.items():
             if "." in name:
                 raise ApplicationException(

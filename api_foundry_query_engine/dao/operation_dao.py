@@ -16,6 +16,9 @@ from api_foundry_query_engine.dao.sql_subselect_query_handler import (
 from api_foundry_query_engine.dao.sql_update_query_handler import (
     SQLUpdateSchemaQueryHandler,
 )
+from api_foundry_query_engine.dao.sql_restore_query_handler import (
+    SQLRestoreSchemaQueryHandler,
+)
 from api_foundry_query_engine.utils.app_exception import ApplicationException
 from api_foundry_query_engine.dao.dao import DAO
 from api_foundry_query_engine.connectors.connection import Cursor
@@ -80,6 +83,10 @@ class OperationDAO(DAO):
                 self._query_handler = SQLDeleteSchemaQueryHandler(
                     self.operation, schema_object, self.engine
                 )
+            elif self.operation.action == "restore":
+                self._query_handler = SQLRestoreSchemaQueryHandler(
+                    self.operation, schema_object, self.engine
+                )
             else:
                 raise ApplicationException(
                     400, f"Invalid operation action: {self.operation.action}"
@@ -110,7 +117,7 @@ class OperationDAO(DAO):
             if op.metadata_params.get("count", False):
                 return result[0]
             self.__fetch_many(result, cursor)
-        elif op.action in ["update", "delete"] and len(result) == 0:
+        elif op.action in ["update", "delete", "restore"] and len(result) == 0:
             raise ApplicationException(400, "No records were modified")
 
         return result

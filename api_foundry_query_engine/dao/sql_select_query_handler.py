@@ -8,6 +8,48 @@ from api_foundry_query_engine.utils.api_model import SchemaObjectProperty
 
 
 class SQLSelectSchemaQueryHandler(SQLSchemaQueryHandler):
+    def _soft_delete_where_clause(self) -> str:
+        """
+        Generate WHERE clause to filter out soft-deleted records.
+
+        Uses smart conflict detection - if query explicitly requests
+        soft-deleted values, those filters are skipped to allow access.
+        Adds table prefixes for JOIN queries.
+        """
+        prefix = self.prefix_map[str(self.schema_object.api_name)]
+        conditions = []
+
+        soft_delete_props = self.schema_object.get_soft_delete_properties()
+        conflicts = self._has_soft_delete_conflicts()
+
+        for prop_name, prop in soft_delete_props.items():
+            # Skip filtering if user explicitly queries for soft-deleted values
+            if conflicts.get(prop_name, False):
+                continue
+
+            strategy = prop.get_soft_delete_strategy()
+            config = prop.get_soft_delete_config()
+            column_name = prop.column_name
+
+            if strategy == "null_check":
+                conditions.append(f"{prefix}.{column_name} IS NULL")
+            elif strategy == "boolean_flag":
+                active_value = config.get("active_value", True)
+                conditions.append(f"{prefix}.{column_name} = {active_value}")
+            elif strategy == "exclude_values":
+                excluded_values = config.get("values", [])
+                if excluded_values:
+                    # Format values for SQL IN clause
+                    formatted_values = ", ".join(
+                        f"'{val}'" if isinstance(val, str) else str(val)
+                        for val in excluded_values
+                    )
+                    conditions.append(
+                        f"{prefix}.{column_name} NOT IN ({formatted_values})"
+                    )
+
+        return " AND ".join(conditions) if conditions else ""
+
     def _template_where(self, expr: str) -> str:
         if not expr:
             return expr
@@ -97,6 +139,11 @@ class SQLSelectSchemaQueryHandler(SQLSchemaQueryHandler):
     def search_condition(self) -> str:
         self.search_placeholders = {}
         conditions = []
+
+        # Add soft delete filtering first
+        soft_delete_filter = self._soft_delete_where_clause()
+        if soft_delete_filter:
+            conditions.append(soft_delete_filter)
 
         for name, value in self.operation.query_params.items():
             parts = name.split(".")

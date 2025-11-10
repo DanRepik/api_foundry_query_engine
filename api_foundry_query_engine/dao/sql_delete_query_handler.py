@@ -56,6 +56,56 @@ class SQLDeleteSchemaQueryHandler(SQLSchemaQueryHandler):
 
         return False
 
+    def _has_soft_delete_fields(self) -> bool:
+        """Check if schema object supports soft delete."""
+        return self.schema_object.has_soft_delete_support()
+
+    def _get_soft_delete_update_values(self) -> str:
+        """Generate SET clause for soft delete operation."""
+        self.store_placeholders = {}
+        columns = []
+
+        # Process soft delete properties
+        soft_delete_props = self.schema_object.get_soft_delete_properties()
+
+        for _, prop in soft_delete_props.items():
+            strategy = prop.get_soft_delete_strategy()
+            config = prop.get_soft_delete_config()
+            column_name = prop.column_name
+
+            if strategy == "null_check":
+                # Set timestamp fields to CURRENT_TIMESTAMP
+                if prop.api_type in ["date-time", "datetime"]:
+                    columns.append(f"{column_name} = CURRENT_TIMESTAMP")
+                else:
+                    columns.append(f"{column_name} = 'deleted'")
+            elif strategy == "boolean_flag":
+                inactive_value = not config.get("active_value", True)
+                value_str = str(inactive_value).lower()
+                columns.append(f"{column_name} = {value_str}")
+            elif strategy == "exclude_values":
+                delete_value = config.get("delete_value")
+                if delete_value:
+                    if isinstance(delete_value, str):
+                        columns.append(f"{column_name} = '{delete_value}'")
+                    else:
+                        columns.append(f"{column_name} = {delete_value}")
+
+        # Process audit fields
+        audit_props = self.schema_object.get_soft_delete_audit_properties()
+        claims = self.operation.claims or {}
+
+        for _, prop in audit_props.items():
+            config = prop.get_soft_delete_config()
+            action = config.get("action", "")
+
+            if action == "delete" and "sub" in claims:
+                placeholder_key = f"audit_{prop.api_name}"
+                columns.append(f"{prop.column_name} = %({placeholder_key})s")
+                self.store_placeholders[placeholder_key] = claims["sub"]
+
+        return " SET " + ", ".join(columns) if columns else ""
+
     @property
     def sql(self) -> str:
         if not self.check_permission():
@@ -81,7 +131,16 @@ class SQLDeleteSchemaQueryHandler(SQLSchemaQueryHandler):
                     + f"property: {concurrency_property.api_name}",
                 )
 
-        return (
-            f"DELETE FROM {self.table_expression}{self.search_condition} "
-            + f"RETURNING {self.select_list}"
-        )
+        # Use soft delete if supported, otherwise hard delete
+        if self._has_soft_delete_fields():
+            update_clause = self._get_soft_delete_update_values()
+            return (
+                f"UPDATE {self.table_expression}{update_clause}"
+                + f"{self.search_condition} RETURNING {self.select_list}"
+            )
+        else:
+            # Fall back to hard delete for tables without soft delete support
+            return (
+                f"DELETE FROM {self.table_expression}{self.search_condition} "
+                + f"RETURNING {self.select_list}"
+            )
