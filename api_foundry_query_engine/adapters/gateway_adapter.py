@@ -46,26 +46,7 @@ class GatewayAdapter(Adapter):
         method = str(event.get("httpMethod", "")).upper()
         action = actions_map.get(method, "read")
 
-        event_params = {}
-
-        path_parameters = self._convert_parameters(event.get("pathParameters"))
-        if path_parameters is not None:
-            event_params.update(path_parameters)
-
-        queryStringParameters = self._convert_parameters(
-            event.get("queryStringParameters")
-        )
-        if queryStringParameters is not None:
-            event_params.update(queryStringParameters)
-
-        query_params, metadata_params = self.split_params(event_params)
-
-        store_params = {}
-        body = event.get("body")
-        if body is not None and len(body) > 0:
-            store_params = json.loads(body)
-
-        # Extract JWT claims from API Gateway event
+        # Extract JWT claims early for batch operations
         claims = event.get("requestContext", {}).get("authorizer", {})
 
         # Handle different authorizer types
@@ -89,6 +70,37 @@ class GatewayAdapter(Adapter):
         else:
             # Non-dict authorizer context
             claims = {}
+
+        # Handle batch requests
+        if entity == "batch" and method == "POST":
+            body = event.get("body")
+            if body:
+                batch_request = json.loads(body)
+                return Operation(
+                    entity="batch",
+                    action="create",
+                    store_params=batch_request,
+                    claims=claims,
+                )
+
+        event_params = {}
+
+        path_parameters = self._convert_parameters(event.get("pathParameters"))
+        if path_parameters is not None:
+            event_params.update(path_parameters)
+
+        queryStringParameters = self._convert_parameters(
+            event.get("queryStringParameters")
+        )
+        if queryStringParameters is not None:
+            event_params.update(queryStringParameters)
+
+        query_params, metadata_params = self.split_params(event_params)
+
+        store_params = {}
+        body = event.get("body")
+        if body is not None and len(body) > 0:
+            store_params = json.loads(body)
         scope_str = claims.get("scope")
 
         # Enforce OAuth scopes (simulating API Gateway authorizer behavior)

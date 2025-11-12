@@ -49,7 +49,7 @@ class SchemaObjectProperty:
     def __repr__(self):
         return f"SchemaObjectProperty(api_name={self.api_name}, column_name={self.column_name}, type={self.type})"
 
-    def convert_to_db_value(self, value: str) -> Optional[Any]:
+    def convert_to_db_value(self, value) -> Optional[Any]:
         if value is None:
             return None
 
@@ -65,14 +65,18 @@ class SchemaObjectProperty:
 
         # Handle boolean types - can map to boolean or integer columns
         elif column_type == "boolean":
-            return value.lower() == "true"
+            if isinstance(value, bool):
+                return value
+            return str(value).lower() == "true"
         elif (
             column_type in ["int", "integer", "smallint", "bigint"]
             and hasattr(self, "api_type")
             and self.api_type == "boolean"
         ):
             # Boolean API type mapping to integer column type
-            return 1 if value.lower() == "true" else 0
+            if isinstance(value, bool):
+                return 1 if value else 0
+            return 1 if str(value).lower() == "true" else 0
 
         # Handle integer types (after boolean check to avoid conflicts)
         elif column_type in [

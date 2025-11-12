@@ -42,13 +42,25 @@ class PostgresCursor(Cursor):
             return result
         except IntegrityError as err:
             # Handle integrity constraint violation (e.g., duplicate key)
-            raise Exception(409, err.pgerror)
+            from api_foundry_query_engine.utils.app_exception import (
+                ApplicationException,
+            )
+
+            raise ApplicationException(409, err.pgerror)
         except ProgrammingError as err:
             # Handle programming errors (e.g., syntax error in SQL)
-            raise Exception(400, err.pgerror)
+            from api_foundry_query_engine.utils.app_exception import (
+                ApplicationException,
+            )
+
+            raise ApplicationException(400, err.pgerror)
         except Error as err:
             # Handle other database errors
-            raise Exception(500, err.pgerror)
+            from api_foundry_query_engine.utils.app_exception import (
+                ApplicationException,
+            )
+
+            raise ApplicationException(500, err.pgerror)
 
     def close(self):
         self.__cursor.close()
@@ -67,6 +79,9 @@ class PostgresConnection(Connection):
 
     def commit(self):
         self.__connection.commit()
+
+    def rollback(self):
+        self.__connection.rollback()
 
     def get_connection(self):
         """

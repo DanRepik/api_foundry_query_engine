@@ -108,6 +108,21 @@ class OperationDAO(DAO):
 
         # Use self.operation if operation is not provided
         op = operation if operation is not None else self.operation
+
+        # Check if this is a batch operation
+        if op.entity == "batch" and op.action == "create":
+            from api_foundry_query_engine.dao.batch_operation_handler import (
+                BatchOperationHandler,
+            )
+
+            # Extract batch request from store_params
+            batch_request = op.store_params
+
+            # Execute batch
+            handler = BatchOperationHandler(batch_request, connector, self.engine)
+            return handler.execute()
+
+        # Standard operation handling
         # Assume connector has a 'cursor()' method to get a Cursor
         cursor = connector.cursor()
 
