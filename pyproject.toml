@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "api-foundry-query-engine"
-version = "0.8.6"
+version = "0.8.34"
 authors = [
     { name="Daniel Repik", email="danrepik@icloud.com" },
 ]
