@@ -322,3 +322,26 @@ class TestBatchOperations:
             assert updated_name == "Updated Name"
         finally:
             connection.close()
+
+    def test_batch_exceeds_size_limit(self, chinook_env, chinook_db):
+        """Test that batch size limit is enforced"""
+        operations = [
+            {
+                "id": f"op_{i}",
+                "entity": "media_type",
+                "action": "create",
+                "store_params": {"name": f"Type {i}"},
+            }
+            for i in range(101)  # Exceeds limit of 100
+        ]
+
+        batch_request = {"operations": operations}
+
+        factory = ConnectionFactory(chinook_env)
+        connection = factory.get_connection("chinook")
+
+        with pytest.raises(ApplicationException) as exc_info:
+            BatchOperationHandler(batch_request, connection, "postgres").execute()
+
+        assert exc_info.value.status_code == 400
+        assert "exceeds maximum" in exc_info.value.message

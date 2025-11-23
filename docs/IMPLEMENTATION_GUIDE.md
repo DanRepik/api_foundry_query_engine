@@ -454,8 +454,18 @@ psql -h localhost -U postgres -d chinook -c "\dt"
 
 **Run integration tests**:
 ```bash
+# Run all batch operation integration tests
 pytest -m integration tests/test_batch_operations.py -v
+
+# Run specific test
+pytest tests/test_batch_operations.py::TestBatchOperations::test_create_invoice_with_line_items -v
 ```
+
+**Test infrastructure**:
+- Uses `fixture_foundry` to auto-provision PostgreSQL in Docker
+- `chinook_env` fixture provides full environment with ConnectionFactory
+- Tests use proper `ConnectionFactory` pattern for database connections
+- All batch tests marked with `@pytest.mark.integration`
 
 **Test scenarios covered**:
 1. ✅ Create invoice with line items (full workflow)
@@ -464,8 +474,8 @@ pytest -m integration tests/test_batch_operations.py -v
 4. ✅ Continue on error (partial success)
 5. ✅ Dependency skipping
 6. ✅ Circular dependency detection
-7. ✅ Batch size limits
-8. ✅ Reference substitution
+7. ✅ Reference substitution (`$ref:op_id.field`)
+8. ✅ Update operations with references
 
 ### Manual Testing
 

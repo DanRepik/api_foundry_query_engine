@@ -67,6 +67,20 @@ class PostgresCursor(Cursor):
 
 
 class PostgresConnection(Connection):
+    """
+    PostgreSQL database connection wrapper.
+
+    Supports two configuration formats:
+    1. DSN-based (preferred for testing with fixture_foundry):
+       {"dsn": "postgresql://user:pass@host:port/dbname"}
+
+    2. Individual parameters (for production AWS Secrets Manager):
+       {"host": "...", "port": 5432, "database": "...", "username": "...", "password": "..."}
+
+    The get_connection() method prioritizes DSN if present, otherwise builds connection
+    from individual parameters.
+    """
+
     def __init__(self, db_config: dict) -> None:
         super().__init__(db_config)
         self.__connection = self.get_connection()
@@ -96,10 +110,16 @@ class PostgresConnection(Connection):
         """
         from psycopg2 import connect
 
+        # If DSN is provided, use it directly (simplifies fixture_foundry integration)
+        if "dsn" in self.db_config:
+            log.info("Connecting using DSN: %s", self.db_config["dsn"])
+            return connect(self.db_config["dsn"])
+
+        # Otherwise, build connection from individual parameters
         dbname = self.db_config["database"]
         user = self.db_config["username"]
         password = self.db_config["password"]
-        host = self.db_config["host"]
+        host = self.db_config.get("host", "localhost")
         port = self.db_config.get("port", 5432)
         additional_config = self.db_config.get("configuration", {})
 

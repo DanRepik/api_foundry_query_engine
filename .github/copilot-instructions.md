@@ -89,8 +89,14 @@ black . && isort .
 ### Test Infrastructure
 - **Database Tests**: Use `fixture_foundry` to auto-provision PostgreSQL containers
 - **Test Data**: Chinook sample database loaded via `tests/Chinook_Postgres.sql`
-- **Fixtures**: `chinook_db` (database), `chinook_api` (API model) in `tests/conftest.py`
+- **Fixtures**:
+  - `chinook_db`: Database config dict with `dsn`, `username`, `password`, `database`, `host_port`
+  - `chinook_env`: Full environment with API spec and secrets for ConnectionFactory
+  - `chinook_api`: API model YAML specification
 - **Test Markers**: `@pytest.mark.unit` (no DB), `@pytest.mark.integration` (with DB)
+- **Connection Pattern**: Use `ConnectionFactory(chinook_env).get_connection("chinook")` in integration tests
+  - Handles DSN-based connections from fixture_foundry
+  - Supports both `host`/`port` and `dsn` configurations
 
 ### Permission Test Patterns (Critical for Security)
 - `tests/test_permissions.py`: SQL generation for different role/permission combinations
@@ -139,7 +145,10 @@ operation = Operation(
 - **JWT Issues**: Check `@token_decoder()` has parentheses, verify environment variables
 - **Permission Denials**: Examine role claims in JWT, check permission regex patterns
 - **SQL Generation**: Look at handler tests for expected SQL patterns given specific operations
-- **Database Integration**: Use `chinook_db` fixture for real database testing
+- **Database Integration**: Use `ConnectionFactory` with `chinook_env` fixture for integration tests
+- **Connection Errors**: `PostgresConnection` supports both DSN strings and individual host/port configs
+  - DSN is preferred for test fixtures (automatically provided by fixture_foundry)
+  - Individual params for production AWS Secrets Manager configs
 
 ## Build & Deployment Context
 - **Build System**: Hatchling (modern Python packaging)

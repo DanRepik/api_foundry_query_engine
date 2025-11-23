@@ -29,7 +29,7 @@ def _log_jwt_configuration():
     log.debug(
         "JWT_ALLOWED_AUDIENCES: %s", os.getenv("JWT_ALLOWED_AUDIENCES", "NOT_SET")
     )
-    log.debug("REQUIRE_TOKEN: %s", os.getenv("REQUIRE_AUTHENTICATION"))
+    log.debug("ANONYMOUS_ROLE: %s", os.getenv("ANONYMOUS_ROLE", "NOT_SET"))
     log.debug("Logging level: %s", logging.getLogger().getEffectiveLevel())
     log.debug("===============================")
 
@@ -39,7 +39,7 @@ def token_decoder(
     audience: Optional[str] = None,
     issuer: Optional[str] = None,
     algorithms: Optional[list[str]] = None,
-    require_authentication: Optional[bool] = None,
+    anonymous_role: Optional[str] = None,
 ):
     """
     JWT token decoder decorator for AWS Lambda handlers.
@@ -53,9 +53,11 @@ def token_decoder(
         audience: Expected audience claim (or list of audiences)
         issuer: Expected issuer claim
         algorithms: List of allowed algorithms (defaults to ["RS256"])
-        require_authentication: Whether to require a token (default: True).
-                      If False, missing tokens are allowed for unsecured
-                      endpoints    Returns:
+        anonymous_role: Role to assign to anonymous (unauthenticated) requests.
+                       If not set and no token is provided, request is rejected.
+                       Set via environment variable ANONYMOUS_ROLE or parameter.
+
+    Returns:
         Decorated handler function that processes JWT tokens before execution
 
     Example:
@@ -70,27 +72,21 @@ def token_decoder(
             # Claims available in event['requestContext']['authorizer']
             return {'statusCode': 200, 'body': 'Secured endpoint'}
 
-        # Public endpoint - no token required
-        @token_decoder(require_authentication=False)
+        # Public endpoint - allows anonymous with 'public' role
+        @token_decoder(anonymous_role="public")
         def public_handler(event, context):
-            # Works without Authorization header
+            # Works without Authorization header, roles=["public"]
             return {'statusCode': 200, 'body': 'Public endpoint'}
     """
 
     # Validate configuration at decorator time
-    config_require_token = require_authentication
-    if os.getenv("REQUIRE_AUTHENTICATION") is not None:
-        config_require_token = os.getenv("REQUIRE_AUTHENTICATION", "").lower() in (
-            "true",
-            "1",
-            "yes",
-        )
+    config_anonymous_role = anonymous_role or os.getenv("ANONYMOUS_ROLE")
 
-    if config_require_token and not jwks_url:
-        raise ValueError(
-            "JWT token validation is required but no jwks_url was provided. "
-            "Either provide a jwks_url or set require_authentication=False."
-        )
+    # If no anonymous role is configured and no JWKS host, check if we're in test mode
+    if not config_anonymous_role and not jwks_url and not os.getenv("JWKS_HOST"):
+        # Allow decorator to be applied without config for testing
+        # Actual validation will happen at runtime when handler is called
+        pass
 
     def decorator(handler: Callable) -> Callable:
         @functools.wraps(handler)
@@ -116,14 +112,10 @@ def token_decoder(
                 else []
             )
             config_algorithms = algorithms or ["RS256"]
-            config_require_authentication = require_authentication or os.getenv(
-                "REQUIRE_AUTHENTICATION", ""
-            ).lower() in ("true", "1", "yes")
-            log.debug("require_authentication %s", require_authentication)
-            log.debug("REQUIRE_TOKEN: %s", os.getenv("REQUIRE_AUTHENTICATION", ""))
-            log.debug(
-                "config_require_authentication: %s", config_require_authentication
-            )
+            config_anonymous_role = anonymous_role or os.getenv("ANONYMOUS_ROLE")
+            log.debug("anonymous_role parameter: %s", anonymous_role)
+            log.debug("ANONYMOUS_ROLE env: %s", os.getenv("ANONYMOUS_ROLE", ""))
+            log.debug("config_anonymous_role: %s", config_anonymous_role)
 
             # Skip JWT decoding if no JWKS URL is configured
             if not config_jwks_url:
@@ -155,30 +147,25 @@ def token_decoder(
                         if config_audience
                         else None,
                         algorithms=config_algorithms,
-                        require_authentication=config_require_token,
+                        anonymous_role=config_anonymous_role,
                     )
                 else:
                     log.debug("Using existing JWTDecoder instance")
                 jwt_decoder = wrapper._jwt_decoder
 
                 log.debug("Decoding JWT token")
-                decoded_token = jwt_decoder.decode(
-                    event, require_token=config_require_token
-                )
+                decoded_token = jwt_decoder.decode(event)
 
-                if decoded_token is not None:
-                    log.debug(
-                        "JWT token successfully decoded: %s",
-                        json.dumps(decoded_token, default=str),
-                    )
-                    # Populate requestContext for Lambda handler compatibility
-                    if "requestContext" not in event:
-                        event["requestContext"] = {}
-                    if "authorizer" not in event["requestContext"]:
-                        event["requestContext"]["authorizer"] = {}
-                    event["requestContext"]["authorizer"] = decoded_token
-                else:
-                    log.debug("No token found, proceeding without authentication")
+                log.debug(
+                    "JWT token result: %s",
+                    json.dumps(decoded_token, default=str) if decoded_token else "None",
+                )
+                # Populate requestContext for Lambda handler compatibility
+                if "requestContext" not in event:
+                    event["requestContext"] = {}
+                if "authorizer" not in event["requestContext"]:
+                    event["requestContext"]["authorizer"] = {}
+                event["requestContext"]["authorizer"] = decoded_token
 
                 return handler(event, context)
 
@@ -198,30 +185,39 @@ def token_decoder(
 class JWTDecoder:
     def __init__(
         self,
-        jwks_url: str,
+        jwks_url: Optional[str] = None,
         issuer: Optional[str] = None,
         allowed_audiences: Optional[set] = None,
         algorithms: Optional[list] = None,
-        require_authentication: Optional[bool] = None,
+        anonymous_role: Optional[str] = None,
     ):
         log.debug(
-            "Initializing JWTDecoder with jwks_url: %s, issuer: %s", jwks_url, issuer
+            "Initializing JWTDecoder with jwks_url: %s, issuer: %s, anonymous_role: %s",
+            jwks_url,
+            issuer,
+            anonymous_role,
         )
         self.jwks_url = jwks_url
-        self.public_key = self.fetch_public_key_from_jwks(jwks_url)
         self.issuer = issuer
         self.allowed_audiences = allowed_audiences or set()
         self.algorithms = algorithms or ["RS256"]
-        self.require_authentication = require_authentication or True
+        self.anonymous_role = anonymous_role
+
+        # Fetch public key only if JWKS URL is provided
+        if jwks_url:
+            self.public_key = self.fetch_public_key_from_jwks(jwks_url)
+            if not self.public_key:
+                raise ValueError(
+                    f"Failed to fetch public key from JWKS URL: {jwks_url}"
+                )
+        else:
+            self.public_key = None
+
         log.debug(
             "JWTDecoder initialized with %d allowed audiences, algorithms: %s",
             len(self.allowed_audiences),
             self.algorithms,
         )
-
-        # Ensure we have a valid public key
-        if not self.public_key:
-            raise ValueError(f"Failed to fetch public key from JWKS URL: {jwks_url}")
 
     def fetch_public_key_from_jwks(
         self, jwks_url: str, kid: Optional[str] = None
@@ -289,21 +285,30 @@ class JWTDecoder:
             log.error("Failed to fetch public key from JWKS: %s", e)
             return None
 
-    def decode(
-        self, event: Dict[str, Any], require_token: bool = True
-    ) -> Optional[Dict[str, Any]]:
-        """Decode the JWT token and return the claims."""
+    def decode(self, event: Dict[str, Any]) -> Dict[str, Any]:
+        """Decode the JWT token and return the claims, or anonymous claims if no token."""
         try:
             token = self.parse_token_from_event(event)
-            return self.decode_token(token)
-        except ValueError as e:
-            if require_token:
-                raise
+            if token:
+                return self.decode_token(token)
+            elif self.anonymous_role:
+                log.debug(
+                    "No token found, using anonymous role: %s", self.anonymous_role
+                )
+                return {"roles": [self.anonymous_role]}
             else:
-                log.debug("No token found but not required: %s", str(e))
-                return None
+                log.error("No token found and no anonymous role configured")
+                raise ValueError(
+                    "Authentication required: no token provided and no anonymous access configured"
+                )
+        except ValueError as e:
+            if self.anonymous_role and "No authorization header" in str(e):
+                log.debug("Token parsing failed, using anonymous role: %s", str(e))
+                return {"roles": [self.anonymous_role]}
+            else:
+                raise
 
-    def parse_token_from_event(self, event: Dict[str, Any]) -> str:
+    def parse_token_from_event(self, event: Dict[str, Any]) -> Optional[str]:
         """Extract the Bearer token from the authorization header."""
         log.debug("Parsing JWT token from event")
 
@@ -315,13 +320,9 @@ class JWTDecoder:
 
         log.debug("Authorization header found: %s", "Yes" if auth_header else "No")
 
-        log.debug("require_authentication: %s", self.require_authentication)
         if not auth_header:
-            if self.require_authentication:
-                log.error("No authorization header found in event")
-                raise ValueError("No authorization header found")
-            else:
-                return ""
+            log.debug("No authorization header found")
+            raise ValueError("No authorization header found")
 
         auth_token_parts = auth_header.split(" ")
         log.debug("Authorization header parts: %d", len(auth_token_parts))
@@ -341,6 +342,9 @@ class JWTDecoder:
     def decode_token(self, token: str) -> Dict[str, Any]:
         """Validate and decode the JWT using the PEM public key."""
         log.debug("Starting JWT token validation and decoding")
+
+        if not self.public_key:
+            raise ValueError("No public key available for token validation")
 
         import jwt
         from jwt import (

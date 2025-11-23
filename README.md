@@ -751,24 +751,58 @@ def chinook_db():
 
 | Fixture | Scope | Purpose |
 |---------|-------|---------|
-| `chinook_db` | session | PostgreSQL container with Chinook database |
-| `chinook_api` | session | API model loaded from `tests/chinook_api.yaml` |
-| `chinook_api_endpoint` | session | LocalStack API endpoint URL |
+| `chinook_db` | session | PostgreSQL config dict (dsn, username, password, database, host_port) |
+| `chinook_env` | session | Full environment with API spec, secrets, and ConnectionFactory config |
+| `chinook_api` | session | API model YAML text from `tests/chinook_api.yaml` |
+
+> **Note**: Integration tests should use `ConnectionFactory(chinook_env)` to get database connections.
+> Direct `PostgresConnection(chinook_db)` usage is deprecated - see `test_batch_operations.py` for proper pattern.
 
 ### Test Organization
 
 ```
 tests/
-├── conftest.py                          # Shared fixtures
+├── conftest.py                          # Shared fixtures (chinook_env, chinook_db, chinook_api)
 ├── chinook_api.yaml                     # Test API specification
 ├── Chinook_Postgres.sql                 # Test database DDL/data
 ├── test_gateway_adapter.py              # Unit tests for adapters
 ├── test_permissions.py                  # Permission SQL generation tests
 ├── test_authorization_enforcement.py    # End-to-end permission tests
 ├── test_association_operations.py       # 1:1 and 1:many loading tests
-├── test_batch_operations.py             # Batch workflow integration tests
+├── test_batch_operations.py             # Batch workflow integration tests (uses ConnectionFactory)
 ├── test_dependency_resolver.py          # Topological sort tests
-└── test_reference_resolver.py           # Reference substitution tests
+├── test_reference_resolver.py           # Reference substitution tests
+└── test_sql_handler.py                  # SQL generation unit/integration tests
+```
+
+### Test Fixture Patterns
+
+**Integration tests** should use `ConnectionFactory` with the `chinook_env` fixture:
+
+```python
+@pytest.mark.integration
+def test_batch_operations(chinook_env):
+    """Proper integration test pattern"""
+    factory = ConnectionFactory(chinook_env)
+    connection = factory.get_connection("chinook")
+    try:
+        handler = BatchOperationHandler(batch_request, connection, "postgres")
+        result = handler.execute()
+        # assertions...
+    finally:
+        connection.close()
+```
+
+**Unit tests** should use mocked/fixture data and mark with `@pytest.mark.unit`:
+
+```python
+@pytest.mark.unit
+def test_sql_generation():
+    """Unit test - no database required"""
+    schema = load_test_schema()
+    handler = SQLSelectSchemaQueryHandler(operation, schema, "postgres")
+    sql, params = handler.generate_sql()
+    assert "SELECT" in sql
 ```
 
 ### Permission Testing Pattern

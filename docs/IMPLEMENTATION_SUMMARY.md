@@ -140,15 +140,28 @@ summary = handler.get_operation_summary()  # Statistics
 
 ### Integration Tests
 
-#### `test_batch_operations.py` - 8 tests
+#### `test_batch_operations.py` - 7 tests
+Uses `ConnectionFactory` pattern with `chinook_env` fixture:
 - Create invoice with line items (full workflow)
 - Mixed read and write operations
 - Rollback on error (atomic mode)
 - Continue on error (non-atomic mode)
 - Dependency skipping on failure
 - Circular dependency detection
-- Batch size limit enforcement
 - Update with reference substitution
+
+**Test Pattern**:
+```python
+@pytest.mark.integration
+def test_example(chinook_env):
+    factory = ConnectionFactory(chinook_env)
+    connection = factory.get_connection("chinook")
+    try:
+        handler = BatchOperationHandler(batch_request, connection, "postgres")
+        result = handler.execute()
+    finally:
+        connection.close()
+```
 
 ## Configuration
 

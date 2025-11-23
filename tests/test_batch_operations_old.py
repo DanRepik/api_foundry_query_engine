@@ -1,5 +1,17 @@
 """
-Integration tests for Batch Operations
+DEPRECATED: This test file should be removed.
+
+Use test_batch_operations.py instead, which follows the proper pattern:
+- Uses ConnectionFactory instead of direct PostgresConnection
+- Only requires chinook_env fixture (not chinook_db)
+- Follows project architectural standards
+
+This file was kept temporarily during refactoring but is no longer maintained.
+All test coverage is provided by test_batch_operations.py.
+"""
+
+"""
+Integration tests for Batch Operations (OLD - DO NOT USE)
 """
 
 import pytest
@@ -133,7 +145,8 @@ class TestBatchOperations:
             "options": {"atomic": True},
         }
 
-        handler = BatchOperationHandler(batch_request, chinook_db, "postgres")
+        connection = PostgresConnection(chinook_db)
+        handler = BatchOperationHandler(batch_request, connection, "postgres")
         result = handler.execute()
 
         log.debug(f"Batch result: {json.dumps(result, indent=2)}")
@@ -181,7 +194,8 @@ class TestBatchOperations:
             ],
         }
 
-        handler = BatchOperationHandler(batch_request, chinook_db, "postgres")
+        connection = PostgresConnection(chinook_db)
+        handler = BatchOperationHandler(batch_request, connection, "postgres")
         result = handler.execute()
 
         assert result["success"] is True
@@ -220,16 +234,22 @@ class TestBatchOperations:
             "options": {"atomic": True, "continueOnError": False},
         }
 
-        handler = BatchOperationHandler(batch_request, chinook_db, "postgres")
+        connection = PostgresConnection(chinook_db)
+        handler = BatchOperationHandler(batch_request, connection, "postgres")
 
         with pytest.raises(ApplicationException):
             handler.execute()
 
         # Verify nothing was committed (transaction rolled back)
         # The media_type should not exist
-        cursor = chinook_db.cursor()
+        import psycopg2
+
+        verify_conn = psycopg2.connect(chinook_db["dsn"])
+        cursor = verify_conn.cursor()
         cursor.execute("SELECT COUNT(*) FROM media_type WHERE name = 'Test Media Type'")
         count = cursor.fetchone()[0]
+        cursor.close()
+        verify_conn.close()
         assert count == 0
 
     def test_batch_continue_on_error(self, chinook_env, chinook_db):
@@ -261,7 +281,8 @@ class TestBatchOperations:
             "options": {"atomic": False, "continueOnError": True},
         }
 
-        handler = BatchOperationHandler(batch_request, chinook_db, "postgres")
+        connection = PostgresConnection(chinook_db)
+        handler = BatchOperationHandler(batch_request, connection, "postgres")
         result = handler.execute()
 
         log.debug(f"Continue on error result: {json.dumps(result, indent=2)}")
@@ -302,7 +323,8 @@ class TestBatchOperations:
             "options": {"continueOnError": True},
         }
 
-        handler = BatchOperationHandler(batch_request, chinook_db, "postgres")
+        connection = PostgresConnection(chinook_db)
+        handler = BatchOperationHandler(batch_request, connection, "postgres")
         result = handler.execute()
 
         assert result["results"]["failing_op"]["status"] == "failed"
@@ -328,8 +350,9 @@ class TestBatchOperations:
             ],
         }
 
+        connection = PostgresConnection(chinook_db)
         with pytest.raises(ApplicationException) as exc_info:
-            BatchOperationHandler(batch_request, chinook_db, "postgres")
+            BatchOperationHandler(batch_request, connection, "postgres")
 
         assert exc_info.value.status_code == 400
         assert "Circular dependency" in exc_info.value.message
@@ -348,8 +371,9 @@ class TestBatchOperations:
 
         batch_request = {"operations": operations}
 
+        connection = PostgresConnection(chinook_db)
         with pytest.raises(ApplicationException) as exc_info:
-            BatchOperationHandler(batch_request, chinook_db, "postgres")
+            BatchOperationHandler(batch_request, connection, "postgres")
 
         assert exc_info.value.status_code == 400
         assert "exceeds maximum" in exc_info.value.message
@@ -378,7 +402,8 @@ class TestBatchOperations:
             ],
         }
 
-        handler = BatchOperationHandler(batch_request, chinook_db, "postgres")
+        connection = PostgresConnection(chinook_db)
+        handler = BatchOperationHandler(batch_request, connection, "postgres")
         result = handler.execute()
 
         assert result["success"] is True
