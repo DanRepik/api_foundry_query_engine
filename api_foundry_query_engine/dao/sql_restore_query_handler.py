@@ -171,8 +171,8 @@ class SQLRestoreSchemaQueryHandler(SQLSchemaQueryHandler):
     def sql(self) -> str:
         if not self.check_permission():
             raise ApplicationException(
-                402,
-                "Subject is not allowed to restore " + f"{self.schema_object.api_name}",
+                403,
+                f"Subject is not allowed to restore " f"{self.schema_object.api_name}",
             )
 
         if not self.schema_object.has_soft_delete_support():

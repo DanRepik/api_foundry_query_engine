@@ -1,10 +1,15 @@
 import re
+import logging
+
 from typing import Match
 from api_foundry_query_engine.dao.sql_query_handler import (
     SQLSchemaQueryHandler,
 )
 from api_foundry_query_engine.utils.app_exception import ApplicationException
 from api_foundry_query_engine.utils.api_model import SchemaObjectProperty
+
+
+log = logging.getLogger(__name__)
 
 
 class SQLSelectSchemaQueryHandler(SQLSchemaQueryHandler):
@@ -242,6 +247,11 @@ class SQLSelectSchemaQueryHandler(SQLSchemaQueryHandler):
                 return self._selection_results
 
             filter_str = self.operation.metadata_params.get("properties", ".*")
+            log.info(f"filter_str from metadata_params: {filter_str}")
+            log.info(
+                f"metadata_params keys: "
+                f"{list(self.operation.metadata_params.keys())}"
+            )
 
             for relation, reg_exs in self.get_regex_map(filter_str).items():
                 # Extract the schema object for the current entity
@@ -283,7 +293,7 @@ class SQLSelectSchemaQueryHandler(SQLSchemaQueryHandler):
 
             if len(self._selection_results) == 0:
                 raise ApplicationException(
-                    402,
+                    403,
                     (
                         "After applying permissions there are no properties "
                         "returned in response"

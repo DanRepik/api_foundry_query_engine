@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Dict, Optional
 from api_foundry_query_engine.dao.sql_query_handler import SQLSchemaQueryHandler
 from api_foundry_query_engine.operation import Operation
 from api_foundry_query_engine.utils.app_exception import ApplicationException
@@ -43,12 +43,38 @@ class SQLInsertSchemaQueryHandler(SQLSchemaQueryHandler):
             )
 
     @property
+    def selection_results(self) -> Dict:
+        """
+        Override parent to combine read+write permissions for INSERT RETURNING.
+        Returns all columns the user can read OR write.
+        """
+        if not hasattr(self, "_insert_selection_results"):
+            # Get both read and write permissions
+            write_props = self.check_permissions(
+                "write",
+                self.schema_object.permissions,
+                self.schema_object.properties,
+            )
+            read_props = self.check_permissions(
+                "read",
+                self.schema_object.permissions,
+                self.schema_object.properties,
+            )
+            # Combine both (union of read and write)
+            self._insert_selection_results = {**read_props, **write_props}
+        return self._insert_selection_results
+
+    @property
     def sql(self) -> str:
         self.concurrency_property = self.schema_object.concurrency_property
+        # Get columns to return - use read permissions if available,
+        # otherwise fall back to primary key
+        returning_clause = self._get_returning_clause()
+
         if not self.concurrency_property:
             return (
                 f"INSERT INTO {self.table_expression}{self.insert_values} "
-                + f"RETURNING {self.select_list}"
+                + returning_clause
             )
 
         if self.operation.store_params.get(self.concurrency_property.api_name):
@@ -61,8 +87,30 @@ class SQLInsertSchemaQueryHandler(SQLSchemaQueryHandler):
             )
         return (
             f"INSERT INTO {self.table_expression}{self.insert_values}"
-            + f" RETURNING {self.select_list}"
+            + returning_clause
         )
+
+    def _get_returning_clause(self) -> str:
+        """
+        Get RETURNING clause with combined read+write permissions.
+        Returns all fields the user can read OR write.
+        """
+        # Use the combined selection_results (read + write)
+        allowed_properties = self.selection_results
+
+        if allowed_properties:
+            # Return all accessible columns
+            columns = [prop.column_name for prop in allowed_properties.values()]
+            return f"RETURNING {', '.join(columns)}"
+
+        # Fallback to primary key if no permissions
+        # (shouldn't happen if user can INSERT)
+        pk_property = self.schema_object.primary_key
+        if pk_property:
+            return f"RETURNING {pk_property.column_name}"
+
+        # Last resort - return nothing
+        return ""
 
     @property
     def insert_values(self) -> str:
@@ -106,7 +154,7 @@ class SQLInsertSchemaQueryHandler(SQLSchemaQueryHandler):
                     raise ApplicationException(400, f"Invalid property: {name}")
                 else:
                     raise ApplicationException(
-                        402,
+                        403,
                         f"Subject is not allowed to create with property: {parts[0]}",
                     )
 

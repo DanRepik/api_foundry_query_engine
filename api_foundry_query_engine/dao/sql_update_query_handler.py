@@ -169,8 +169,9 @@ class SQLUpdateSchemaQueryHandler(SQLSchemaQueryHandler):
 
         if invalid_columns:
             raise ApplicationException(
-                402,
-                f"Subject does not have permission to update properties: {invalid_columns}",
+                403,
+                f"Subject does not have permission to update properties: "
+                f"{invalid_columns}",
             )
         return f" SET {', '.join(columns)}"
 

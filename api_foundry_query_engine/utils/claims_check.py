@@ -418,16 +418,15 @@ def _extract_entity_from_path(event: Dict[str, Any]) -> Optional[str]:
     # Remove leading slash and split by slash
     path_parts = path.lstrip("/").split("/")
 
-    # Skip API prefixes and return the last non-parameter part
-    # For paths like "/chinook-api/album" or "/api/v1/customer/123"
-    for part in reversed(path_parts):
-        if part and not part.startswith("{") and not part.isdigit():
-            return part
-
-    # If no suitable part found, return the last non-parameter part
-    for part in reversed(path_parts):
-        if part and not part.startswith("{"):
-            return part
+    # Find the first non-parameter part (entity is typically first)
+    # For paths like "/comment/123" or "/comment/123/version/1"
+    # Skip common API prefixes like "api", "v1", etc.
+    api_prefixes = {"api", "v1", "v2", "v3"}
+    for part in path_parts:
+        if part and not part.startswith("{") and part not in api_prefixes:
+            # Skip numeric IDs and known path keywords
+            if not part.isdigit() and part not in {"version", "batch"}:
+                return part
 
     return None
 

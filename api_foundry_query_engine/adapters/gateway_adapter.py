@@ -1,9 +1,12 @@
 import json
+import logging
 from typing import Any, Dict, List, Optional, Tuple
 
 from api_foundry_query_engine.adapters.adapter import Adapter
 from api_foundry_query_engine.operation import Operation
 from api_foundry_query_engine.utils.app_exception import ApplicationException
+
+log = logging.getLogger(__name__)
 
 actions_map = {
     "GET": "read",
@@ -184,8 +187,12 @@ class GatewayAdapter(Adapter):
 
         for key, value in parameters.items():
             if key.startswith("__"):
-                metadata_params[key] = value
+                metadata_params[key[2:]] = value
             else:
                 query_params[key] = value
+
+        log.info(f"split_params input: {parameters}")
+        log.info(f"query_params: {query_params}")
+        log.info(f"metadata_params: {metadata_params}")
 
         return query_params, metadata_params

@@ -51,11 +51,16 @@ class SQLSubselectSchemaQueryHandler(SQLSelectSchemaQueryHandler):
         if len(self.select_list_columns) == 1:  # then it only contains the key
             return None
 
+        # Get the parent table alias to avoid ambiguous column references
+        parent_alias = self.parent_generator.prefix_map[
+            str(self.parent_generator.schema_object.api_name)
+        ]
+
         sql = (
             f"SELECT {self.select_list} "
             + f"FROM {self.relation.child_schema_object.qualified_name} "
             + f"WHERE {self.relation.child_property} "
-            + f"IN ( SELECT {self.relation.parent_property} "
+            + f"IN ( SELECT {parent_alias}.{self.relation.parent_property} "
             + f"FROM {self.parent_generator.table_expression}"
             + f"{self.parent_generator.search_condition} "
             #            + f"{order_by} {limit} {offset})"

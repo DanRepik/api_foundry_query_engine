@@ -30,8 +30,88 @@ def _log_jwt_configuration():
         "JWT_ALLOWED_AUDIENCES: %s", os.getenv("JWT_ALLOWED_AUDIENCES", "NOT_SET")
     )
     log.debug("ANONYMOUS_ROLE: %s", os.getenv("ANONYMOUS_ROLE", "NOT_SET"))
+    log.debug(
+        "TOKEN_VALIDATOR_LAMBDA_ARN: %s",
+        os.getenv("TOKEN_VALIDATOR_LAMBDA_ARN", "NOT_SET"),
+    )
     log.debug("Logging level: %s", logging.getLogger().getEffectiveLevel())
     log.debug("===============================")
+
+
+class LambdaTokenValidator:
+    """Validates tokens by invoking an AWS Lambda TOKEN authorizer."""
+
+    def __init__(self, lambda_arn: str):
+        """
+        Initialize Lambda token validator.
+
+        Args:
+            lambda_arn: ARN or name of the Lambda authorizer function
+        """
+        self.lambda_arn = lambda_arn
+        try:
+            import boto3
+
+            self.lambda_client = boto3.client("lambda")
+            log.debug("Lambda client initialized for validator: %s", lambda_arn)
+        except ImportError:
+            log.error("boto3 not available for Lambda token validation")
+            raise ImportError("boto3 is required for Lambda token validation")
+
+    def validate(
+        self, token: str, method_arn: str = "arn:aws:execute-api:*:*:*"
+    ) -> Dict[str, Any]:
+        """
+        Invoke AWS Lambda TOKEN authorizer.
+
+        Args:
+            token: JWT token (without "Bearer " prefix)
+            method_arn: Method ARN for resource-based policies
+
+        Returns:
+            Claims dict (extracted from context field)
+
+        Raises:
+            ValueError: If validation fails
+        """
+        log.debug("Invoking Lambda authorizer: %s", self.lambda_arn)
+
+        payload = {
+            "type": "TOKEN",
+            "authorizationToken": f"Bearer {token}",
+            "methodArn": method_arn,
+        }
+
+        try:
+            response = self.lambda_client.invoke(
+                FunctionName=self.lambda_arn,
+                InvocationType="RequestResponse",
+                Payload=json.dumps(payload),
+            )
+
+            result = json.loads(response["Payload"].read())
+            log.debug("Lambda authorizer response received")
+
+            # Check for Lambda errors
+            if "FunctionError" in response:
+                error_msg = result.get("errorMessage", "Unknown error")
+                log.error("Lambda authorizer error: %s", error_msg)
+                raise ValueError(f"Token validation failed: {error_msg}")
+
+            # Extract context (claims) from authorizer response
+            # AWS API Gateway places the 'context' object into
+            # requestContext.authorizer
+            context = result.get("context", {})
+            if not context:
+                log.warning("Authorizer returned no context/claims")
+                raise ValueError("Authorizer returned no context/claims")
+
+            log.debug("Token validated successfully, claims extracted from context")
+            return context
+
+        except Exception as e:
+            log.error("Lambda authorizer invocation failed: %s", e)
+            raise ValueError(f"Token validation failed: {str(e)}")
 
 
 def token_decoder(
@@ -40,58 +120,75 @@ def token_decoder(
     issuer: Optional[str] = None,
     algorithms: Optional[list[str]] = None,
     anonymous_role: Optional[str] = None,
+    lambda_validator_arn: Optional[str] = None,
 ):
     """
     JWT token decoder decorator for AWS Lambda handlers.
 
     This filter extracts JWT tokens from the Authorization header, validates
-    them, and passes the decoded token as a keyword argument to the handler
-    function.
+    them using JWKS, Lambda authorizer, or falls back to anonymous access.
+
+    Validation priority:
+    1. Check if requestContext.authorizer exists (gateway validated)
+    2. Try Lambda validation if TOKEN_VALIDATOR_LAMBDA_ARN is set
+    3. Try JWKS validation if JWKS_HOST is set
+    4. Fall back to anonymous role if ANONYMOUS_ROLE is set
+    5. Reject with error
 
     Args:
-        jwks_url: URL to fetch JWKS from (e.g., "https://oauth.local/.well-known/jwks.json")
+        jwks_url: URL to fetch JWKS from
         audience: Expected audience claim (or list of audiences)
         issuer: Expected issuer claim
         algorithms: List of allowed algorithms (defaults to ["RS256"])
-        anonymous_role: Role to assign to anonymous (unauthenticated) requests.
-                       If not set and no token is provided, request is rejected.
-                       Set via environment variable ANONYMOUS_ROLE or parameter.
+        anonymous_role: Role to assign to anonymous requests.
+                       Set via ANONYMOUS_ROLE environment variable.
+        lambda_validator_arn: ARN of Lambda TOKEN authorizer function.
+                             Set via TOKEN_VALIDATOR_LAMBDA_ARN env var.
 
     Returns:
-        Decorated handler function that processes JWT tokens before execution
+        Decorated handler function that processes JWT tokens
 
     Example:
-        # Secured endpoint - requires valid JWT token
+        # JWKS validation
         @token_decoder(
-            jwks_url="https://your-oauth-server/.well-known/jwks.json",
+            jwks_url="https://oauth.local/.well-known/jwks.json",
             audience="test-api",
             issuer="https://oauth.local/",
-            algorithms=["RS256"]
         )
-        def secured_handler(event, context):
-            # Claims available in event['requestContext']['authorizer']
-            return {'statusCode': 200, 'body': 'Secured endpoint'}
+        def handler(event, context):
+            return {'statusCode': 200, 'body': 'Secured'}
 
-        # Public endpoint - allows anonymous with 'public' role
+        # Lambda authorizer validation
+        @token_decoder()  # Uses TOKEN_VALIDATOR_LAMBDA_ARN env var
+        def handler(event, context):
+            return {'statusCode': 200, 'body': 'Secured'}
+
+        # Public endpoint
         @token_decoder(anonymous_role="public")
-        def public_handler(event, context):
-            # Works without Authorization header, roles=["public"]
-            return {'statusCode': 200, 'body': 'Public endpoint'}
+        def handler(event, context):
+            return {'statusCode': 200, 'body': 'Public'}
     """
 
     # Validate configuration at decorator time
     config_anonymous_role = anonymous_role or os.getenv("ANONYMOUS_ROLE")
+    config_lambda_arn = lambda_validator_arn or os.getenv("TOKEN_VALIDATOR_LAMBDA_ARN")
 
-    # If no anonymous role is configured and no JWKS host, check if we're in test mode
-    if not config_anonymous_role and not jwks_url and not os.getenv("JWKS_HOST"):
-        # Allow decorator to be applied without config for testing
-        # Actual validation will happen at runtime when handler is called
+    # If no config provided, allow for runtime configuration
+    if (
+        not config_anonymous_role
+        and not jwks_url
+        and not os.getenv("JWKS_HOST")
+        and not config_lambda_arn
+    ):
         pass
 
     def decorator(handler: Callable) -> Callable:
         @functools.wraps(handler)
         def wrapper(event: dict, context: Any) -> dict:
-            log.debug("JWT token decoder starting for function: %s", handler.__name__)
+            log.debug(
+                "JWT token decoder starting for function: %s",
+                handler.__name__,
+            )
 
             # Log configuration for debugging
             if log.isEnabledFor(logging.DEBUG):
@@ -99,7 +196,15 @@ def token_decoder(
 
             log.debug("Event structure: %s", json.dumps(event, default=str))
 
-            # Determine configuration source
+            # Check if authorizer already exists (gateway validated)
+            if event.get("requestContext", {}).get("authorizer"):
+                log.debug("Authorizer already exists, skipping JWT processing")
+                return handler(event, context)
+
+            # Determine configuration sources
+            config_lambda_arn = lambda_validator_arn or os.getenv(
+                "TOKEN_VALIDATOR_LAMBDA_ARN"
+            )
             config_jwks_url = (
                 jwks_url or f"{os.getenv('JWKS_HOST')}/.well-known/jwks.json"
                 if os.getenv("JWKS_HOST")
@@ -116,51 +221,120 @@ def token_decoder(
             log.debug("anonymous_role parameter: %s", anonymous_role)
             log.debug("ANONYMOUS_ROLE env: %s", os.getenv("ANONYMOUS_ROLE", ""))
             log.debug("config_anonymous_role: %s", config_anonymous_role)
+            log.debug("config_lambda_arn: %s", config_lambda_arn)
 
-            # Skip JWT decoding if no JWKS URL is configured
-            if not config_jwks_url:
-                log.debug("No JWKS URL configured, skipping JWT decoding")
+            # Skip all validation if no method configured
+            if not config_lambda_arn and not config_jwks_url:
+                log.debug("No validation method configured")
+                if config_anonymous_role:
+                    log.debug("Using anonymous role: %s", config_anonymous_role)
+                    if "requestContext" not in event:
+                        event["requestContext"] = {}
+                    event["requestContext"]["authorizer"] = {
+                        "roles": [config_anonymous_role]
+                    }
                 return handler(event, context)
 
             try:
                 log.debug("Processing JWT token extraction and validation")
 
-                # Check if authorizer already exists (preserve context)
-                if event.get("requestContext", {}).get("authorizer"):
-                    log.debug("Authorizer already exists, skipping JWT processing")
-                    return handler(event, context)
-
-                # Set up a singleton JWTDecoder instance
+                # Set up validation instances
                 if not hasattr(wrapper, "_jwt_decoder"):
-                    log.debug("Creating new JWTDecoder instance")
-                    log.debug(
-                        "JWT config - URL: %s, issuer: %s, aud: %s, alg: %s",
-                        config_jwks_url,
-                        config_issuer,
-                        config_audience,
-                        config_algorithms,
-                    )
-                    wrapper._jwt_decoder = JWTDecoder(
-                        jwks_url=config_jwks_url,
-                        issuer=config_issuer,
-                        allowed_audiences=set(config_audience)
-                        if config_audience
-                        else None,
-                        algorithms=config_algorithms,
-                        anonymous_role=config_anonymous_role,
-                    )
-                else:
-                    log.debug("Using existing JWTDecoder instance")
-                jwt_decoder = wrapper._jwt_decoder
+                    log.debug("Creating validator instances")
 
-                log.debug("Decoding JWT token")
-                decoded_token = jwt_decoder.decode(event)
+                    # Lambda validator takes priority
+                    if config_lambda_arn:
+                        log.debug(
+                            "Configuring Lambda validator: %s",
+                            config_lambda_arn,
+                        )
+                        wrapper._lambda_validator = LambdaTokenValidator(
+                            config_lambda_arn
+                        )
+                    else:
+                        wrapper._lambda_validator = None
+
+                    # JWKS validator as fallback
+                    if config_jwks_url:
+                        log.debug(
+                            "Configuring JWKS validator: %s",
+                            config_jwks_url,
+                        )
+                        wrapper._jwt_decoder = JWTDecoder(
+                            jwks_url=config_jwks_url,
+                            issuer=config_issuer,
+                            allowed_audiences=set(config_audience)
+                            if config_audience
+                            else None,
+                            algorithms=config_algorithms,
+                            anonymous_role=config_anonymous_role,
+                        )
+                    else:
+                        wrapper._jwt_decoder = None
+
+                    wrapper._anonymous_role = config_anonymous_role
+
+                log.debug("Parsing token from event")
+                token = None
+                try:
+                    # Extract token
+                    auth_header = (
+                        event.get("authorizationToken")
+                        or event.get("headers", {}).get("Authorization")
+                        or event.get("headers", {}).get("authorization")
+                    )
+
+                    if auth_header:
+                        auth_parts = auth_header.split(" ")
+                        if len(auth_parts) == 2 and auth_parts[0].lower() == "bearer":
+                            token = auth_parts[1]
+                            log.debug("Token extracted, length: %d", len(token))
+                except Exception:
+                    log.debug("Token extraction failed")
+
+                decoded_token = None
+
+                # Try Lambda validator first
+                if token and wrapper._lambda_validator:
+                    try:
+                        log.debug("Attempting Lambda validation")
+                        decoded_token = wrapper._lambda_validator.validate(token)
+                        log.debug("Lambda validation successful")
+                    except Exception as e:
+                        log.warning("Lambda validation failed: %s", e)
+                        # Fall through to JWKS
+
+                # Try JWKS validator if Lambda failed or unavailable
+                if token and not decoded_token and wrapper._jwt_decoder:
+                    try:
+                        log.debug("Attempting JWKS validation")
+                        decoded_token = wrapper._jwt_decoder.decode_token(token)
+                        log.debug("JWKS validation successful")
+                    except Exception as e:
+                        log.warning("JWKS validation failed: %s", e)
+
+                # Fall back to anonymous if configured
+                if not decoded_token:
+                    if wrapper._anonymous_role:
+                        log.debug(
+                            "Using anonymous role: %s",
+                            wrapper._anonymous_role,
+                        )
+                        decoded_token = {"roles": [wrapper._anonymous_role]}
+                    else:
+                        log.error("No valid token and no anonymous access")
+                        return {
+                            "statusCode": 401,
+                            "headers": {"Content-Type": "application/json"},
+                            "body": json.dumps({"error": "Unauthorized"}),
+                        }
 
                 log.debug(
                     "JWT token result: %s",
                     json.dumps(decoded_token, default=str) if decoded_token else "None",
                 )
-                # Populate requestContext for Lambda handler compatibility
+
+                # Populate requestContext
                 if "requestContext" not in event:
                     event["requestContext"] = {}
                 if "authorizer" not in event["requestContext"]:

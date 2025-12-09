@@ -110,7 +110,7 @@ class SQLDeleteSchemaQueryHandler(SQLSchemaQueryHandler):
     def sql(self) -> str:
         if not self.check_permission():
             raise ApplicationException(
-                402, f"Subject is not allowed to delete {self.schema_object.api_name}"
+                403, f"Subject is not allowed to delete {self.schema_object.api_name}"
             )
 
         concurrency_property = self.schema_object.concurrency_property
