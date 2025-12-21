@@ -48,7 +48,7 @@ class QueryEngine:
 
 
 @token_decoder()
-@claims_check()
+@claims_check(validate_path_scope=False)
 def handler(event, _):
     if not hasattr(handler, "engine_config"):
         log.info("Loading engine config from environment variables")

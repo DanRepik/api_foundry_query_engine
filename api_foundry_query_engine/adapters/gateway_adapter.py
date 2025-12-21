@@ -4,7 +4,6 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from api_foundry_query_engine.adapters.adapter import Adapter
 from api_foundry_query_engine.operation import Operation
-from api_foundry_query_engine.utils.app_exception import ApplicationException
 
 log = logging.getLogger(__name__)
 
@@ -41,8 +40,11 @@ class GatewayAdapter(Adapter):
         """
         resource = event.get("resource")
         if resource is not None and "/" in resource:
-            parts = resource.split("/")
-            entity = parts[1] if len(parts) > 1 else None
+            parts = [p for p in resource.split("/") if p]  # Remove empty strings
+            # Skip common API prefixes like "api", "v1", "v2", etc.
+            api_prefixes = {"api", "v1", "v2", "v3"}
+            filtered_parts = [p for p in parts if p not in api_prefixes and not p.startswith("{")]
+            entity = filtered_parts[0] if filtered_parts else None
         else:
             entity = None
 
@@ -54,8 +56,17 @@ class GatewayAdapter(Adapter):
 
         # Handle different authorizer types
         if isinstance(claims, dict):
+            # Parse JSON-stringified fields (roles, permissions)
+            # from token validator
+            for key in ["roles", "permissions"]:
+                if key in claims and isinstance(claims[key], str):
+                    try:
+                        claims[key] = json.loads(claims[key])
+                    except (json.JSONDecodeError, ValueError):
+                        pass  # Keep as string if not valid JSON
+
             # TOKEN authorizer puts claims directly in authorizer object
-            if "sub" in claims or "iss" in claims:
+            if "sub" in claims or "iss" in claims or "roles" in claims:
                 # Already have JWT claims at top level
                 pass
             elif "claims" in claims:
@@ -68,8 +79,8 @@ class GatewayAdapter(Adapter):
                 # Lambda authorizer fallback
                 claims = claims["lambda"]
             else:
-                # Empty or unknown format
-                claims = {}
+                # Empty or unknown format - keep what we have
+                pass
         else:
             # Non-dict authorizer context
             claims = {}
@@ -92,46 +103,15 @@ class GatewayAdapter(Adapter):
         if path_parameters is not None:
             event_params.update(path_parameters)
 
-        queryStringParameters = self._convert_parameters(
-            event.get("queryStringParameters")
-        )
-        if queryStringParameters is not None:
-            event_params.update(queryStringParameters)
-
+        query_string_parameters = self._convert_parameters(event.get("queryStringParameters"))
+        if query_string_parameters is not None:
+            event_params.update(query_string_parameters)
         query_params, metadata_params = self.split_params(event_params)
 
         store_params = {}
         body = event.get("body")
         if body is not None and len(body) > 0:
             store_params = json.loads(body)
-        scope_str = claims.get("scope")
-
-        # Enforce OAuth scopes (simulating API Gateway authorizer behavior)
-        # Required scope pattern: read|write|delete:<entity>
-        if entity and scope_str:
-            required_action = {
-                "GET": "read",
-                "POST": "write",
-                "PUT": "write",
-                "PATCH": "write",
-                "DELETE": "delete",
-            }.get(method, "read")
-            required_scope = f"{required_action}:{entity}"
-            token_scopes = set(str(scope_str).split())
-
-            def _has_scope(required: str) -> bool:
-                return (
-                    required in token_scopes
-                    or f"{required_action}:*" in token_scopes
-                    or "*" in token_scopes
-                    or "*:*" in token_scopes
-                )
-
-            if not _has_scope(required_scope):
-                raise ApplicationException(
-                    401,
-                    ("insufficient_scope: required_scope=" + required_scope),
-                )
 
         return Operation(
             entity=entity,
@@ -142,9 +122,7 @@ class GatewayAdapter(Adapter):
             claims=claims,
         )
 
-    def _convert_parameters(
-        self, parameters: Optional[Dict[str, Any]]
-    ) -> Optional[Dict[str, Any]]:
+    def _convert_parameters(self, parameters: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
         """
         Convert parameters to appropriate types.
 
@@ -168,9 +146,7 @@ class GatewayAdapter(Adapter):
                     result[parameter] = value
         return result
 
-    def split_params(
-        self, parameters: Dict[str, Any]
-    ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    def split_params(self, parameters: Dict[str, Any]) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         """
         Split a dictionary into two dictionaries based on keys.
 
@@ -191,8 +167,8 @@ class GatewayAdapter(Adapter):
             else:
                 query_params[key] = value
 
-        log.info(f"split_params input: {parameters}")
-        log.info(f"query_params: {query_params}")
-        log.info(f"metadata_params: {metadata_params}")
+        log.info("split_params input: %s", parameters)
+        log.info("query_params: %s", query_params)
+        log.info("metadata_params: %s", metadata_params)
 
         return query_params, metadata_params
