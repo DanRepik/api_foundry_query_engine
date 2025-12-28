@@ -83,17 +83,13 @@ def claims_check(
                 config_require_authentication = require_authentication or os.getenv(
                     "REQUIRE_AUTHENTICATION", ""
                 ).lower() in ("true", "1", "yes")
-                log.debug(
-                    "config_require_authentication: %s", config_require_authentication
-                )
+                log.debug("config_require_authentication: %s", config_require_authentication)
 
                 # Extract claims from the event (set by token_decoder)
                 claims = _extract_claims(event)
                 if not claims:
                     if config_require_authentication:
-                        raise ApplicationException(
-                            status_code=401, message="No authentication claims found"
-                        )
+                        raise ApplicationException(status_code=401, message="No authentication claims found")
                 else:
                     log.debug("Found claims: %s", list(claims.keys()))
 
@@ -111,9 +107,7 @@ def claims_check(
 
                     # Check specific scopes if required
                     if required_scopes:
-                        _validate_required_scopes(
-                            claims, required_scopes, event, operation_type, entity_name
-                        )
+                        _validate_required_scopes(claims, required_scopes, event, operation_type, entity_name)
 
                     # Check specific permissions if required
                     if required_permissions:
@@ -157,9 +151,7 @@ def _extract_claims(event: Dict[str, Any]) -> Optional[Dict[str, Any]]:
 
         # Check direct authorizer context (most common for TOKEN authorizer)
         claim_keys = ["sub", "scope", "permissions", "roles"]
-        if isinstance(authorizer, dict) and any(
-            key in authorizer for key in claim_keys
-        ):
+        if isinstance(authorizer, dict) and any(key in authorizer for key in claim_keys):
             log.debug("Found claims in requestContext.authorizer")
             return authorizer
 
@@ -202,12 +194,12 @@ def _validate_scope_format(claims: Dict[str, Any]) -> None:
     elif not isinstance(scopes, list):
         scopes = []
 
-    # Allow empty scopes if permissions exist
+    # Scopes and permissions are now optional - they may be present but are not required
+    # The x-af-permissions in the API spec handles role-based access control
     permissions = claims.get("permissions", [])
     if not scopes and not permissions:
-        raise ApplicationException(
-            status_code=403, message="No scopes or permissions found in token"
-        )
+        log.debug("No scopes or permissions found in token - relying on role-based permissions")
+        return
 
     # Validate scope format: should be operation:resource or operation:*
     for scope in scopes:
@@ -238,9 +230,7 @@ def _validate_min_scope_level(claims: Dict[str, Any], min_level: str) -> None:
             user_max_level = max(user_max_level, scope_value)
 
     if user_max_level < min_level_value:
-        raise ApplicationException(
-            status_code=403, message=f"Insufficient scope level. Required: {min_level}"
-        )
+        raise ApplicationException(status_code=403, message=f"Insufficient scope level. Required: {min_level}")
 
 
 def _validate_path_scope(
@@ -293,8 +283,7 @@ def _validate_path_scope(
     if not has_scope and not has_permission:
         raise ApplicationException(
             status_code=403,
-            message=f"Access denied. Required scope: {required_scope} "
-            f"or permission: {required_permission}",
+            message=f"Access denied. Required scope: {required_scope} " f"or permission: {required_permission}",
         )
 
     log.debug("Path scope validation passed for %s", required_scope)
@@ -321,14 +310,10 @@ def _validate_required_scopes(
     # Check each required scope
     for required_scope in required_scopes:
         if not _scope_matches(user_scopes, required_scope, operation, entity):
-            raise ApplicationException(
-                status_code=403, message=f"Required scope not found: {required_scope}"
-            )
+            raise ApplicationException(status_code=403, message=f"Required scope not found: {required_scope}")
 
 
-def _validate_required_permissions(
-    claims: Dict[str, Any], required_permissions: list
-) -> None:
+def _validate_required_permissions(claims: Dict[str, Any], required_permissions: list) -> None:
     """Validate that user has required permissions."""
     user_permissions = claims.get("permissions", [])
     if isinstance(user_permissions, str):
@@ -431,9 +416,7 @@ def _extract_entity_from_path(event: Dict[str, Any]) -> Optional[str]:
     return None
 
 
-def _scope_matches(
-    user_scopes: list, required_scope: str, operation: str, entity: str
-) -> bool:
+def _scope_matches(user_scopes: list, required_scope: str, operation: str, entity: str) -> bool:
     """Check if user scopes match the required scope."""
     _ = entity  # Silence unused warning
     # Check for exact match
