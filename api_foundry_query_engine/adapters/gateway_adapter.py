@@ -39,12 +39,12 @@ class GatewayAdapter(Adapter):
         - tuple: Tuple containing data, query and metadata parameters.
         """
         resource = event.get("resource")
-        if resource is not None and "/" in resource:
+        if resource:
             parts = [p for p in resource.split("/") if p]  # Remove empty strings
             # Skip common API prefixes like "api", "v1", "v2", etc.
             api_prefixes = {"api", "v1", "v2", "v3"}
-            filtered_parts = [p for p in parts if p not in api_prefixes and not p.startswith("{")]
-            entity = filtered_parts[0] if filtered_parts else None
+            literal_parts = [p for p in parts if p not in api_prefixes and not p.startswith("{")]
+            entity = "_".join(literal_parts) if literal_parts else None
         else:
             entity = None
 
@@ -99,7 +99,16 @@ class GatewayAdapter(Adapter):
 
         event_params = {}
 
-        path_parameters = self._convert_parameters(event.get("pathParameters"))
+        raw_path = event.get("path") or ""
+        path_parameters = event.get("pathParameters") or {}
+        if "proxy" in path_parameters and not raw_path:
+            raw_path = f"/{path_parameters['proxy']}"
+        extracted_path_params = self._extract_path_params(resource, raw_path)
+        for key, value in extracted_path_params.items():
+            if key not in path_parameters or path_parameters.get(key) in (None, "", "None"):
+                path_parameters[key] = value
+
+        path_parameters = self._convert_parameters(path_parameters)
         if path_parameters is not None:
             event_params.update(path_parameters)
 
@@ -107,6 +116,8 @@ class GatewayAdapter(Adapter):
         if query_string_parameters is not None:
             event_params.update(query_string_parameters)
         query_params, metadata_params = self.split_params(event_params)
+        log.info("Unmarshalled query parameters: %s", query_params)
+        log.info("Unmarshalled metadata parameters: %s", metadata_params)
 
         store_params = {}
         body = event.get("body")
@@ -145,6 +156,22 @@ class GatewayAdapter(Adapter):
                 except ValueError:
                     result[parameter] = value
         return result
+
+    def _extract_path_params(self, resource: Optional[str], path: str) -> Dict[str, str]:
+        if not resource or not path:
+            return {}
+
+        resource_parts = [p for p in resource.split("/") if p]
+        path_parts = [p for p in path.split("/") if p]
+        params: Dict[str, str] = {}
+
+        for template, actual in zip(resource_parts, path_parts):
+            if template.startswith("{") and template.endswith("}"):
+                key = template[1:-1]
+                if key:
+                    params[key] = actual
+
+        return params
 
     def split_params(self, parameters: Dict[str, Any]) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         """

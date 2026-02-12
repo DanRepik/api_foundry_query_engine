@@ -403,17 +403,27 @@ def _extract_entity_from_path(event: Dict[str, Any]) -> Optional[str]:
     # Remove leading slash and split by slash
     path_parts = path.lstrip("/").split("/")
 
-    # Find the first non-parameter part (entity is typically first)
+    # Find literal path parts (ignoring params and common prefixes)
     # For paths like "/comment/123" or "/comment/123/version/1"
-    # Skip common API prefixes like "api", "v1", etc.
     api_prefixes = {"api", "v1", "v2", "v3"}
+    literal_parts = []
     for part in path_parts:
-        if part and not part.startswith("{") and part not in api_prefixes:
-            # Skip numeric IDs and known path keywords
-            if not part.isdigit() and part not in {"version", "batch"}:
-                return part
+        if not part or part.startswith("{"):
+            continue
+        if part in api_prefixes:
+            continue
+        # Skip numeric IDs and known path keywords
+        if part.isdigit() or part in {"version", "batch"}:
+            continue
+        literal_parts.append(part)
 
-    return None
+    if not literal_parts:
+        return None
+
+    if len(literal_parts) == 1:
+        return literal_parts[0]
+
+    return "_".join(literal_parts)
 
 
 def _scope_matches(user_scopes: list, required_scope: str, operation: str, entity: str) -> bool:
