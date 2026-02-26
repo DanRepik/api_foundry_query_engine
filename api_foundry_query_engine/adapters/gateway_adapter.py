@@ -40,7 +40,7 @@ class GatewayAdapter(Adapter):
         """
         resource = event.get("resource")
         if resource:
-            parts = [p for p in resource.split("/") if p]  # Remove empty strings
+            parts = [p for p in resource.split("/") if p]
             # Skip common API prefixes like "api", "v1", "v2", etc.
             api_prefixes = {"api", "v1", "v2", "v3"}
             literal_parts = [p for p in parts if p not in api_prefixes and not p.startswith("{")]
