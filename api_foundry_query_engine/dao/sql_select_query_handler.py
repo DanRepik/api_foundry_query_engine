@@ -1,4 +1,6 @@
 import re
+import logging
+
 from typing import Match
 from api_foundry_query_engine.dao.sql_query_handler import (
     SQLSchemaQueryHandler,
@@ -7,7 +9,52 @@ from api_foundry_query_engine.utils.app_exception import ApplicationException
 from api_foundry_query_engine.utils.api_model import SchemaObjectProperty
 
 
+log = logging.getLogger(__name__)
+
+
 class SQLSelectSchemaQueryHandler(SQLSchemaQueryHandler):
+    def _soft_delete_where_clause(self) -> str:
+        """
+        Generate WHERE clause to filter out soft-deleted records.
+
+        Uses smart conflict detection - if query explicitly requests
+        soft-deleted values, those filters are skipped to allow access.
+        Adds table prefixes for JOIN queries.
+        """
+        prefix = self.prefix_map[str(self.schema_object.api_name)]
+        conditions = []
+
+        soft_delete_props = self.schema_object.get_soft_delete_properties()
+        conflicts = self._has_soft_delete_conflicts()
+
+        for prop_name, prop in soft_delete_props.items():
+            # Skip filtering if user explicitly queries for soft-deleted values
+            if conflicts.get(prop_name, False):
+                continue
+
+            strategy = prop.get_soft_delete_strategy()
+            config = prop.get_soft_delete_config()
+            column_name = prop.column_name
+
+            if strategy == "null_check":
+                conditions.append(f"{prefix}.{column_name} IS NULL")
+            elif strategy == "boolean_flag":
+                active_value = config.get("active_value", True)
+                conditions.append(f"{prefix}.{column_name} = {active_value}")
+            elif strategy == "exclude_values":
+                excluded_values = config.get("values", [])
+                if excluded_values:
+                    # Format values for SQL IN clause
+                    formatted_values = ", ".join(
+                        f"'{val}'" if isinstance(val, str) else str(val)
+                        for val in excluded_values
+                    )
+                    conditions.append(
+                        f"{prefix}.{column_name} NOT IN ({formatted_values})"
+                    )
+
+        return " AND ".join(conditions) if conditions else ""
+
     def _template_where(self, expr: str) -> str:
         if not expr:
             return expr
@@ -33,20 +80,34 @@ class SQLSelectSchemaQueryHandler(SQLSchemaQueryHandler):
         if "default" in perms:
             provider = perms.get("default", {}) or {}
             read_map = provider.get("read", {}) or {}
+            role_permissions = perms.get("default", {})
         else:
             # legacy role-first -> synthesize read map
             read_map = {}
+            role_permissions = perms
             for role, role_perms in perms.items():
                 if isinstance(role_perms, dict):
                     read_map[role] = role_perms.get("read")
 
         filters = []
         for role in self.operation.roles or []:
+            # Check for role-level WHERE clause (hybrid approach)
+            role_where = None
+            if isinstance(role_permissions.get(role), dict):
+                role_where = role_permissions[role].get("where")
+
+            # Check for operation-level WHERE clause
+            operation_where = None
             rule = read_map.get(role)
             if isinstance(rule, dict):
-                where = rule.get("where")
-                if isinstance(where, str) and where.strip():
-                    filters.append(self._template_where(where))
+                operation_where = rule.get("where")
+
+            # Operation-level takes precedence, fallback to role-level
+            where_clause = operation_where if operation_where else role_where
+
+            if isinstance(where_clause, str) and where_clause.strip():
+                filters.append(self._template_where(where_clause))
+
         if not filters:
             return ""
         return "(" + ") OR (".join(filters) + ")"
@@ -83,6 +144,11 @@ class SQLSelectSchemaQueryHandler(SQLSchemaQueryHandler):
     def search_condition(self) -> str:
         self.search_placeholders = {}
         conditions = []
+
+        # Add soft delete filtering first
+        soft_delete_filter = self._soft_delete_where_clause()
+        if soft_delete_filter:
+            conditions.append(soft_delete_filter)
 
         for name, value in self.operation.query_params.items():
             parts = name.split(".")
@@ -181,6 +247,11 @@ class SQLSelectSchemaQueryHandler(SQLSchemaQueryHandler):
                 return self._selection_results
 
             filter_str = self.operation.metadata_params.get("properties", ".*")
+            log.info(f"filter_str from metadata_params: {filter_str}")
+            log.info(
+                f"metadata_params keys: "
+                f"{list(self.operation.metadata_params.keys())}"
+            )
 
             for relation, reg_exs in self.get_regex_map(filter_str).items():
                 # Extract the schema object for the current entity
@@ -222,7 +293,7 @@ class SQLSelectSchemaQueryHandler(SQLSchemaQueryHandler):
 
             if len(self._selection_results) == 0:
                 raise ApplicationException(
-                    402,
+                    403,
                     (
                         "After applying permissions there are no properties "
                         "returned in response"

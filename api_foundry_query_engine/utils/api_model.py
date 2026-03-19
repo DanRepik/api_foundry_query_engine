@@ -2,7 +2,7 @@ import os
 import yaml
 
 from datetime import datetime
-from typing import Any, Dict, Mapping, Optional
+from typing import Any, Dict, List, Mapping, Optional
 
 from api_foundry_query_engine.utils.logger import logger
 
@@ -43,12 +43,13 @@ class SchemaObjectProperty:
         self.sequence_name = data.get("sequence_name")
         self.concurrency_control = data.get("concurrency_control")
         self.inject_value = data.get("inject_value")
-        self.inject_on = data.get("inject_on")
+        self.inject_on = data.get("inject_on", [])
+        self.soft_delete = data.get("x-af-soft-delete") or data.get("soft_delete")
 
     def __repr__(self):
         return f"SchemaObjectProperty(api_name={self.api_name}, column_name={self.column_name}, type={self.type})"
 
-    def convert_to_db_value(self, value: str) -> Optional[Any]:
+    def convert_to_db_value(self, value) -> Optional[Any]:
         if value is None:
             return None
 
@@ -64,14 +65,18 @@ class SchemaObjectProperty:
 
         # Handle boolean types - can map to boolean or integer columns
         elif column_type == "boolean":
-            return value.lower() == "true"
+            if isinstance(value, bool):
+                return value
+            return str(value).lower() == "true"
         elif (
             column_type in ["int", "integer", "smallint", "bigint"]
             and hasattr(self, "api_type")
             and self.api_type == "boolean"
         ):
             # Boolean API type mapping to integer column type
-            return 1 if value.lower() == "true" else 0
+            if isinstance(value, bool):
+                return 1 if value else 0
+            return 1 if str(value).lower() == "true" else 0
 
         # Handle integer types (after boolean check to avoid conflicts)
         elif column_type in [
@@ -99,6 +104,20 @@ class SchemaObjectProperty:
         # Default to string conversion for unknown types
         else:
             return value
+
+    def is_soft_delete_field(self) -> bool:
+        """Check if this property is configured for soft delete."""
+        return self.soft_delete is not None
+
+    def get_soft_delete_strategy(self) -> str:
+        """Get the soft delete strategy for this property."""
+        if not self.soft_delete:
+            return "none"
+        return self.soft_delete.get("strategy", "none")
+
+    def get_soft_delete_config(self) -> Dict[str, Any]:
+        """Get the complete soft delete configuration."""
+        return self.soft_delete or {}
 
     def convert_to_api_value(self, value) -> Optional[Any]:
         if value is None:
@@ -188,9 +207,7 @@ class SchemaObjectAssociation:
             raise ValueError(f"Primary key not defined for schema '{self.schema_name}'")
         column_name = getattr(child_schema.primary_key, "column_name", None)
         if column_name is None:
-            raise ValueError(
-                f"Primary key property does not have 'column_name' for schema '{self.schema_name}'"
-            )
+            raise ValueError(f"Primary key property does not have 'column_name' for schema '{self.schema_name}'")
         return column_name
 
     @property
@@ -201,14 +218,10 @@ class SchemaObjectAssociation:
         if not parent_schema_obj:
             raise ValueError(f"SchemaObject '{self.parent_schema}' not found")
         if not parent_schema_obj.primary_key:
-            raise ValueError(
-                f"Primary key not defined for schema '{self.parent_schema}'"
-            )
+            raise ValueError(f"Primary key not defined for schema '{self.parent_schema}'")
         column_name = getattr(parent_schema_obj.primary_key, "column_name", None)
         if column_name is None:
-            raise ValueError(
-                f"Primary key property does not have 'column_name' for schema '{self.parent_schema}'"
-            )
+            raise ValueError(f"Primary key property does not have 'column_name' for schema '{self.parent_schema}'")
         return column_name
 
     def __repr__(self):
@@ -236,23 +249,16 @@ class SchemaObject:
         self.database: str = str(data.get("database"))
         self.schema: Optional[str] = data.get("schema")
         self.table_name: str = str(data.get("table_name"))
-        self.qualified_name: str = (
-            f"{self.schema}.{self.table_name}" if self.schema else self.table_name
-        )
+        self.qualified_name: str = f"{self.schema}.{self.table_name}" if self.schema else self.table_name
         self.properties: Dict[str, SchemaObjectProperty] = {
-            name: SchemaObjectProperty(prop_data)
-            for name, prop_data in data.get("properties", {}).items()
+            name: SchemaObjectProperty(prop_data) for name, prop_data in data.get("properties", {}).items()
         }
         self.relations = {
-            name: SchemaObjectAssociation(
-                self.api_name if self.api_name is not None else "", assoc_data
-            )
+            name: SchemaObjectAssociation(self.api_name if self.api_name is not None else "", assoc_data)
             for name, assoc_data in data.get("relations", {}).items()
         }
         self.concurrency_property = (
-            self.properties[str(data.get("concurrency_property"))]
-            if data.get("concurrency_property")
-            else None
+            self.properties[str(data.get("concurrency_property"))] if data.get("concurrency_property") else None
         )
         self._primary_key: str = str(data.get("primary_key"))
         self.permissions = data.get("permissions")
@@ -264,6 +270,37 @@ class SchemaObject:
     def primary_key(self):
         return self.properties.get(self._primary_key)
 
+    def has_soft_delete_support(self) -> bool:
+        """Check if this schema object supports soft delete operations."""
+        return len(self.get_soft_delete_properties()) > 0
+
+    def get_soft_delete_properties(self) -> Dict[str, SchemaObjectProperty]:
+        """Get all properties configured for soft delete filtering."""
+        return {
+            name: prop
+            for name, prop in self.properties.items()
+            if prop.is_soft_delete_field()
+            and prop.get_soft_delete_strategy() in ["null_check", "boolean_flag", "exclude_values"]
+        }
+
+    def get_soft_delete_audit_properties(
+        self,
+    ) -> Dict[str, SchemaObjectProperty]:
+        """Get properties used for soft delete audit trails."""
+        return {
+            name: prop
+            for name, prop in self.properties.items()
+            if prop.is_soft_delete_field() and prop.get_soft_delete_strategy() == "audit_field"
+        }
+
+    def get_soft_delete_strategies(self) -> List[str]:
+        """Get list of all soft delete strategies used in this schema."""
+        strategies = set()
+        for prop in self.properties.values():
+            if prop.is_soft_delete_field():
+                strategies.add(prop.get_soft_delete_strategy())
+        return list(strategies)
+
 
 class PathOperation:
     """Represents a path operation in the API configuration."""
@@ -274,12 +311,10 @@ class PathOperation:
         self.sql: str = data["sql"]
         self.database: str = data["database"]
         self.inputs: Dict[str, SchemaObjectProperty] = {
-            name: SchemaObjectProperty(input_data)
-            for name, input_data in data.get("inputs", {}).items()
+            name: SchemaObjectProperty(input_data) for name, input_data in data.get("inputs", {}).items()
         }
         self.outputs: Dict[str, SchemaObjectProperty] = {
-            name: SchemaObjectProperty(output_data)
-            for name, output_data in data.get("outputs", {}).items()
+            name: SchemaObjectProperty(output_data) for name, output_data in data.get("outputs", {}).items()
         }
         self.permissions = data.get("security")
 
@@ -291,14 +326,12 @@ class APIModel:
     """Class to load and expose the API configuration as objects."""
 
     def __init__(self, config: Dict[str, Any]):
-        print("building api_model")
+        log.info("building api_model")
         self.schema_objects = {
-            name: SchemaObject(schema_data)
-            for name, schema_data in config.get("schema_objects", {}).items()
+            name: SchemaObject(schema_data) for name, schema_data in config.get("schema_objects", {}).items()
         }
         self.path_operations = {
-            name: PathOperation(path_data)
-            for name, path_data in config.get("path_operations", {}).items()
+            name: PathOperation(path_data) for name, path_data in config.get("path_operations", {}).items()
         }
 
     def get_path_operation(self, path: str, method: str) -> Optional[PathOperation]:
@@ -321,8 +354,6 @@ def set_api_model(engine_config: Mapping[str, str]):
             api_model = APIModel(yaml.safe_load(engine_config["API_SPEC"]))
         else:
             log.info("Loading API model from file")
-            with open(
-                os.environ.get("API_SPEC", "/var/task/api_spec.yaml"), "r"
-            ) as file:
+            with open(os.environ.get("API_SPEC", "/var/task/api_spec.yaml"), "r") as file:
                 api_model = APIModel(yaml.safe_load(file))
-        log.info(f"Loaded API model: {api_model}")
+        log.info("Loaded API model: %s", api_model)

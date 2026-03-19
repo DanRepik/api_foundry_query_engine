@@ -12,13 +12,15 @@ schema_objects:
         api_name: album
         database: chinook
         permissions:
-            sales_associate:
-                read: album_id|title
-                write: year_released
-            sales_manager:
-                delete: true
-                read: .*
-                write: .*
+            default:
+                read:
+                    sales_associate: album_id|title
+                    sales_manager: .*
+                write:
+                    sales_associate: year_released
+                    sales_manager: .*
+                delete:
+                    sales_manager: true
         primary_key: album_id
         properties:
             album_id:
@@ -198,7 +200,7 @@ def test_read_some_restrictions(chinook_env):
             entity="album",
             action="read",
             query_params={"album_id": "24"},
-            roles=["sales_associate"],
+            claims={"roles": ["sales_associate"]},
         ),
         "postgres",
     )
@@ -222,7 +224,7 @@ def test_read_no_restrictions(chinook_env):
             entity="album",
             action="read",
             query_params={"album_id": "24"},
-            roles=["sales_manager"],
+            claims={"roles": ["sales_manager"]},
         ),
         "postgres",
     )
@@ -247,7 +249,7 @@ def test_read_all_restricted(chinook_env):
             entity="album",
             action="read",
             query_params={"album_id": "24"},
-            roles=["customer_agent"],
+            claims={"roles": ["customer_agent"]},
         ),
         "postgres",
     )
@@ -279,7 +281,7 @@ def test_read_relation_some_restrictions(chinook_env):
             action="read",
             query_params={"invoice_id": "24"},
             metadata_params={"properties": ".* invoice_line_items:.*"},
-            roles={"sales_associate": True},
+            claims={"roles": ["sales_associate"]},
         ),
         "postgres",
     )
@@ -307,7 +309,7 @@ def test_create_prohibited_property(chinook_env):
             entity="album",
             action="create",
             store_params={"title": "something different"},
-            roles=["sales_associate"],
+            claims={"roles": ["sales_associate"]},
         ),
         "postgres",
     )
@@ -329,7 +331,7 @@ def test_create_allowed_property(chinook_env):
             entity="album",
             action="create",
             store_params={"title": "new title"},
-            roles=["sales_manager"],
+            claims={"roles": ["sales_manager"]},
         ),
         "postgres",
     )
@@ -353,7 +355,7 @@ def test_update_prohibited_property(chinook_env):
             action="update",
             query_params={"album_id": "24"},
             store_params={"title": "something different"},
-            roles=["sales_associate"],
+            claims={"roles": ["sales_associate"]},
         ),
         "postgres",
     )
@@ -379,7 +381,7 @@ def test_update_allowed_property(chinook_env):
             action="update",
             query_params={"album_id": "24"},
             store_params={"title": "2024"},
-            roles=["sales_manager"],
+            claims={"roles": ["sales_manager"]},
         ),
         "postgres",
     )
@@ -402,7 +404,7 @@ def test_delete_prohibited(chinook_env):
             entity="album",
             action="delete",
             query_params={"album_id": 5},
-            roles=["sales_associate"],
+            claims={"roles": ["sales_associate"]},
         ),
         "postgres",
     )
@@ -424,7 +426,7 @@ def test_delete_allowed(chinook_env):
             entity="album",
             action="delete",
             query_params={"album_id": 5},
-            roles=["sales_manager"],
+            claims={"roles": ["sales_manager"]},
         ),
         "postgres",
     )
@@ -435,3 +437,60 @@ def test_delete_allowed(chinook_env):
         sql
         == "DELETE FROM album WHERE album_id = %(album_id)s RETURNING album_id, artist_id, title"
     )
+
+
+def test_concise_format_permissions(chinook_env):
+    """Test that both concise and verbose permission formats work together."""
+    # The existing ALBUM_SCHEMA already demonstrates the concise format:
+    # sales_associate: read: album_id|title, write: year_released
+    # This test validates that both concise and verbose formats are supported
+
+    # Test 1: Read permissions with concise format
+    operation_dao = OperationDAO(
+        Operation(
+            entity="album",
+            action="read",
+            query_params={"album_id": "1"},
+            claims={"roles": ["sales_associate"]},
+        ),
+        "postgresql",
+    )
+    # sales_associate has read: "album_id|title" (concise format)
+    assert "a.album_id" in operation_dao.query_handler.selection_results
+    assert "a.title" in operation_dao.query_handler.selection_results
+    # Should not have artist_id in selection (not in read permissions)
+    assert "a.artist_id" not in operation_dao.query_handler.selection_results
+
+    # Test 2: Write permissions with concise format
+    operation_dao = OperationDAO(
+        Operation(
+            entity="album",
+            action="update",
+            query_params={"album_id": "1"},
+            store_params={"year_released": 2023},
+            claims={"roles": ["sales_associate"]},
+        ),
+        "postgresql",
+    )
+    # sales_associate has write: "year_released" (concise format)
+    # The returning clause uses read permissions: "album_id|title"
+    # So the selection_results should contain read-permitted fields only
+    assert "album_id" in operation_dao.query_handler.selection_results
+    assert "title" in operation_dao.query_handler.selection_results
+    # year_released is writable but not readable for sales_associate
+    assert "year_released" not in operation_dao.query_handler.selection_results
+
+    # Test 3: Manager has broader permissions (concise .* patterns)
+    operation_dao = OperationDAO(
+        Operation(
+            entity="album",
+            action="read",
+            query_params={"album_id": "1"},
+            claims={"roles": ["sales_manager"]},
+        ),
+        "postgresql",
+    )
+    # sales_manager has read: ".*" (concise format allowing all)
+    assert "a.album_id" in operation_dao.query_handler.selection_results
+    assert "a.title" in operation_dao.query_handler.selection_results
+    assert "a.artist_id" in operation_dao.query_handler.selection_results

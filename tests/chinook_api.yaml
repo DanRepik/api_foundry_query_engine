@@ -115,13 +115,15 @@ schema_objects:
         database: chinook
         primary_key: album_id
         permissions:
-            sales_associate:
-                read: album_id|title
-                write: year_released
-            sales_manager:
-                delete: true
-                read: .*
-                write: .*
+            default:
+                read:
+                    sales_associate: album_id|title
+                    sales_manager: .*
+                write:
+                    sales_associate: year_released
+                    sales_manager: .*
+                delete:
+                    sales_manager: true
         properties:
             album_id:
                 api_name: album_id

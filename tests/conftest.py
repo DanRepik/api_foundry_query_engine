@@ -1,6 +1,7 @@
 import json
 import pytest
 import psycopg2
+from typing import Iterable
 
 from pathlib import Path
 
@@ -12,6 +13,43 @@ from fixture_foundry import exec_sql_file
 from fixture_foundry import postgres  # noqa F401
 from fixture_foundry import localstack  # noqa F401
 from fixture_foundry import container_network  # noqa F401
+
+
+DOCKER_DEPENDENT_FIXTURES = {
+    "container_network",
+    "localstack",
+    "postgres",
+    "chinook_db",
+    "chinook_env",
+}
+
+
+def _docker_available() -> bool:
+    try:
+        import docker
+
+        client = docker.from_env()
+        try:
+            client.ping()
+        finally:
+            client.close()
+        return True
+    except Exception:
+        return False
+
+
+def _uses_any_fixture(fixtures: Iterable[str], names: set[str]) -> bool:
+    return bool(set(fixtures).intersection(names))
+
+
+def pytest_collection_modifyitems(config, items):
+    if _docker_available():
+        return
+
+    skip_docker = pytest.mark.skip(reason="Skipping Docker-dependent test: Docker daemon is not accessible.")
+    for item in items:
+        if _uses_any_fixture(getattr(item, "fixturenames", []), DOCKER_DEPENDENT_FIXTURES):
+            item.add_marker(skip_docker)
 
 
 @pytest.fixture(scope="session")

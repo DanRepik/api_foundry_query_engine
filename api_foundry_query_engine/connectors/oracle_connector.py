@@ -15,7 +15,7 @@ class OracleConnnector(Connector):
     def execute(self, cursor, sql: str, parameters: dict):
         from oracledb import Error, IntegrityError, ProgrammingError
 
-        log.debug(f"sql: {sql}, parameters: {parameters}")
+        log.debug("sql: %s, parameters: %s", sql, parameters)
         try:
             cursor.execute(sql, parameters)
         except IntegrityError as err:

@@ -32,7 +32,7 @@ class ConnectionFactory:
         """
 
         # Get the secret name based on the engine and database from the secrets map
-        log.info(f"database: {database}")
+        log.info("database: %s", database)
         db_config = self.db_config_map.get(database)
         if not db_config:
             # Use config dict for secrets
@@ -40,7 +40,7 @@ class ConnectionFactory:
             if isinstance(secrets_map, str):
                 secrets_map = json.loads(secrets_map)
             secret_name = secrets_map.get(database)
-            log.debug(f"secret_name: {secret_name}")
+            log.debug("secret_name: %s", secret_name)
 
             if secret_name:
                 db_config = self.__get_secret(secret_name)
@@ -79,7 +79,7 @@ class ConnectionFactory:
         sts_client = boto3.client("sts", endpoint_url=endpoint_url)
 
         secret_account_id = self.config.get("SECRET_ACCOUNT_ID", None)
-        log.debug(f"secret_account_id: {secret_account_id}")
+        log.debug("secret_account_id: %s", secret_account_id)
 
         if secret_account_id:
             # If a secret account ID is provided, assume a role in that account
@@ -100,16 +100,16 @@ class ConnectionFactory:
             )
         else:
             # If no secret account ID is provided, use the default account
-            log.info(f"endpoint_url: {endpoint_url}")
+            log.info("endpoint_url: %s", endpoint_url)
             secretsmanager = boto3.client(
                 "secretsmanager",
                 endpoint_url=endpoint_url,
             )
 
         # Get the secret value from AWS Secrets Manager
-        log.info(f"db_secret_name: {db_secret_name}")
+        log.info("db_secret_name: %s", db_secret_name)
         db_secret = secretsmanager.get_secret_value(SecretId=db_secret_name)
-        log.debug(f"loading secret name: {db_secret}")
+        log.debug("loading secret name: %s", db_secret)
 
         # Return the parsed JSON secret string
         return json.loads(db_secret.get("SecretString"))

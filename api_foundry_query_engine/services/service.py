@@ -8,7 +8,9 @@ log = logger(__name__)
 
 
 class Service:
-    def __init__(self, config: dict = {}):
+    def __init__(self, config: dict = None):
+        if not config:
+            config = {}
         self.config = config
 
     def execute(self, operation: Operation) -> list[dict]:
@@ -16,7 +18,9 @@ class Service:
 
 
 class ServiceAdapter(Service):
-    def __init__(self, config: dict = {}):
+    def __init__(self, config: dict = None):
+        if not config:
+            config = {}
         super().__init__(config)
 
     def execute(self, operation: Operation) -> list[dict]:
@@ -24,7 +28,9 @@ class ServiceAdapter(Service):
 
 
 class MutationPublisher(ServiceAdapter):
-    def __init__(self, config: dict = {}):
+    def __init__(self, config: dict = None):
+        if not config:
+            config = {}
         super().__init__(config)
 
     def execute(self, operation):
@@ -34,7 +40,7 @@ class MutationPublisher(ServiceAdapter):
 
     def publish_notification(self, operation):
         topic_arn = self.config.get("BROADCAST_TOPIC", None)
-        log.debug(f"Topic ARN: {topic_arn}")
+        log.debug("Topic ARN: %s", topic_arn)
 
         if topic_arn is not None:
             log.debug("Sending message")
@@ -46,7 +52,7 @@ class MutationPublisher(ServiceAdapter):
             }
 
             message_str = json.dumps({"default": json.dumps(message)})
-            log.debug(f"message_str: {message_str}")
+            log.debug("message_str: %s", message_str)
             hash_object = hashlib.sha256(message_str.encode("utf-8"))
             hex_dig = hash_object.hexdigest()
 
@@ -57,7 +63,7 @@ class MutationPublisher(ServiceAdapter):
                 MessageGroupId=operation.api_name,
                 Message=message_str,
             )
-            log.info(f"publish msg id {msg_id}")
+            log.info("publish msg id %s", msg_id)
 
     def __client(self, client_type):
         import boto3

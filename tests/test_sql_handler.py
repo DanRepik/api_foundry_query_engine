@@ -30,20 +30,21 @@ from tests.test_schema_objects_fixtures import (
 log = logger(__name__)
 
 
-@pytest.mark.unit
 class TestSQLHandler:
+    @pytest.mark.unit
     def test_field_selection(self):
         sql_handler = SQLSelectSchemaQueryHandler(
             Operation(entity="invoice", action="read"),
             invoice_with_datetime_version_stamp(),
             "postgres",
         )
-        log.info(f"prefix_map: {sql_handler.prefix_map}")
+        log.info("prefix_map: %s", sql_handler.prefix_map)
         result_map = sql_handler.selection_results
-        log.info(f"result_map: {result_map}")
+        log.info("result_map: %s", result_map)
         assert len(result_map) == 10
         assert result_map.get("i.invoice_id") is not None
 
+    @pytest.mark.integration
     def test_field_selection_with_association(self, chinook_env):
         schema_object = get_schema_object("invoice")
         assert schema_object is not None
@@ -58,14 +59,15 @@ class TestSQLHandler:
         )
 
         result_map = sql_handler.selection_results
-        log.info(f"result_map: {result_map}")
+        log.info("result_map: %s", result_map)
         assert len(result_map) == 24
         assert result_map.get("i.invoice_id") is not None
         assert result_map.get("c.customer_id") is not None
-        log.info(f"select_list: {sql_handler.select_list}")
+        log.info("select_list: %s", sql_handler.select_list)
         assert "i.invoice_id" in sql_handler.select_list
         assert "c.customer_id" in sql_handler.select_list
 
+    @pytest.mark.unit
     def test_search_condition(self):
         sql_handler = SQLSelectSchemaQueryHandler(
             Operation(
@@ -77,7 +79,7 @@ class TestSQLHandler:
             "postgres",
         )
 
-        log.info(f"sql: {sql_handler.sql}, placeholders: {sql_handler.placeholders}")
+        log.info("sql: %s, placeholders: %s", sql_handler.sql, sql_handler.placeholders)
 
         assert (
             sql_handler.sql
@@ -102,9 +104,9 @@ class TestSQLHandler:
             )
 
             sql_handler = operation_dao.query_handler
-            log.info(f"sql_handler: {sql_handler}")
+            log.info("sql_handler: %s", sql_handler)
 
-            log.info(f"sql: {sql_handler.sql}")
+            log.info("sql: %s", sql_handler.sql)
             assert False
 
         except ApplicationException as e:
@@ -113,6 +115,7 @@ class TestSQLHandler:
                 == "Queries using properties in arrays is not supported. schema object: invoice, property: line_items.track_id"  # noqa E501
             )
 
+    @pytest.mark.unit
     def test_search_invalid_property(self):
         try:
             operation_dao = OperationDAO(
@@ -125,9 +128,9 @@ class TestSQLHandler:
             )
 
             sql_operation = operation_dao.query_handler
-            log.info(f"sql_operation: {sql_operation}")
+            log.info("sql_operation: %s", sql_operation)
 
-            log.info(f"sql: {sql_operation.sql}")
+            log.info("sql: %s", sql_operation.sql)
             assert False
         except ApplicationException as e:
             assert (
@@ -135,6 +138,7 @@ class TestSQLHandler:
                 == "Invalid query parameter, property not found. schema object: invoice, property: track_id"  # noqa E501
             )
 
+    @pytest.mark.unit
     def test_search_association_property(self):
         load_api(os.path.join(os.getcwd(), "resources/api_spec.yaml"))
         try:
@@ -176,6 +180,7 @@ class TestSQLHandler:
                 == "Invalid query parameter, property not found. schema object: invoice, property: track_id"  # noqa E501
             )
 
+    @pytest.mark.integration
     def test_search_value_assignment_type_relations(self, chinook_env):
         schema_object = get_schema_object("invoice")
         assert schema_object is not None
@@ -232,6 +237,7 @@ class TestSQLHandler:
         assert placeholders["i_total_1"] == 1250.0
         assert placeholders["i_total_2"] == 1300.0
 
+    @pytest.mark.integration
     def test_search_value_assignment_column_rename(self, chinook_env):
         schema_object = get_schema_object("invoice")
         assert schema_object is not None
@@ -259,6 +265,7 @@ class TestSQLHandler:
         assert isinstance(placeholders["i_invoice_date"], date)
         assert placeholders["i_invoice_date"] == date(2000, 12, 12)
 
+    @pytest.mark.integration
     def test_search_value_assignment_datetime(self, chinook_env):
         schema_object = get_schema_object("invoice")
         assert schema_object is not None
@@ -276,13 +283,14 @@ class TestSQLHandler:
         (sql, placeholders) = sql_handler.search_value_assignment(
             schema_object.properties["last_updated"], "gt::2000-12-12T12:34:56Z", "i"  # type: ignore # noqa E501
         )
-        log.info(f"sql: {sql}, properties: {placeholders}")
+        log.info("sql: %s, properties: %s", sql, placeholders)
         assert sql == "i.last_updated > %(i_last_updated)s"
         assert isinstance(placeholders["i_last_updated"], datetime)
         assert placeholders["i_last_updated"] == datetime(
             2000, 12, 12, 12, 34, 56, tzinfo=timezone.utc
         )
 
+    @pytest.mark.integration
     def test_search_value_assignment_date(self, chinook_env):
         schema_object = get_schema_object("invoice")
         assert schema_object is not None
@@ -304,7 +312,7 @@ class TestSQLHandler:
         (sql, placeholders) = sql_handler.search_value_assignment(
             schema_object.properties["invoice_date"], "gt::2000-12-12", "i"  # type: ignore # noqa E501
         )
-        log.info(f"sql: {sql}, properties: {placeholders}")
+        log.info("sql: %s, properties: %s", sql, placeholders)
         assert sql == "i.invoice_date > %(i_invoice_date)s"
         assert isinstance(placeholders["i_invoice_date"], date)
         assert placeholders["i_invoice_date"] == date(2000, 12, 12)
@@ -326,11 +334,12 @@ class TestSQLHandler:
         )
 
         (sql, placeholders) = sql_handler.search_value_assignment(property, "true", "i")
-        log.info(f"sql: {sql}, properties: {placeholders}")
+        log.info("sql: %s, properties: %s", sql, placeholders)
         assert sql == "i.is_active = %(i_is_active)s"
         assert isinstance(placeholders["i_last_updated"], date)
         assert placeholders["i_last_updated"] == date(2000, 12, 12)
 
+    @pytest.mark.unit
     def test_select_invalid_column(self):
         try:
             sql_handler = SQLSelectSchemaQueryHandler(
@@ -342,11 +351,12 @@ class TestSQLHandler:
                 invoice_with_datetime_version_stamp(),
                 "postgres",
             )
-            log.info(f"sql: {sql_handler.sql}")
+            log.info("sql: %s", sql_handler.sql)
             assert False
         except ApplicationException as e:
             assert e.status_code == 500
 
+    @pytest.mark.integration
     def test_select_single_joined_table(self, chinook_env):
         schema_object = get_schema_object("invoice")
         assert schema_object is not None
@@ -362,7 +372,7 @@ class TestSQLHandler:
             "postgres",
         )
 
-        log.info(f"sql: {sql_handler.sql}, placeholders: {sql_handler.placeholders}")
+        log.info("sql: %s, placeholders: %s", sql_handler.sql, sql_handler.placeholders)
 
         assert (
             sql_handler.sql
@@ -376,6 +386,7 @@ class TestSQLHandler:
         )
         assert sql_handler.placeholders == {"i_billing_state": "FL"}
 
+    @pytest.mark.integration
     def test_select_schema_handling_table(self, chinook_env):
         schema_object = get_schema_object("invoice")
         assert schema_object is not None
@@ -391,7 +402,7 @@ class TestSQLHandler:
             "postgres",
         )
 
-        log.info(f"sql: {sql_handler.sql}, placeholders: {sql_handler.placeholders}")
+        log.info("sql: %s, placeholders: %s", sql_handler.sql, sql_handler.placeholders)
 
         assert sql_handler.sql == (
             "SELECT i.billing_address, i.billing_city, i.billing_country, i.billing_postal_code, "
@@ -404,6 +415,7 @@ class TestSQLHandler:
         )
         assert sql_handler.placeholders == {"i_billing_state": "FL"}
 
+    @pytest.mark.unit
     def test_select_simple_table(self):
         try:
             sql_handler = SQLSelectSchemaQueryHandler(
@@ -412,7 +424,7 @@ class TestSQLHandler:
                 "postgres",
             )
             log.info(
-                f"sql: {sql_handler.sql}, placeholders: {sql_handler.placeholders}"
+                "sql: %s, placeholders: %s", sql_handler.sql, sql_handler.placeholders
             )
 
             assert (
@@ -423,6 +435,7 @@ class TestSQLHandler:
         except ApplicationException as e:
             assert False, e.message
 
+    @pytest.mark.unit
     def test_select_condition_with_count(self):
         try:
             sql_handler = SQLSelectSchemaQueryHandler(
@@ -436,7 +449,7 @@ class TestSQLHandler:
                 "postgres",
             )
             log.info(
-                f"sql: {sql_handler.sql}, placeholders: {sql_handler.placeholders}"
+                "sql: %s, placeholders: %s", sql_handler.sql, sql_handler.placeholders
             )
 
             assert (
@@ -447,6 +460,7 @@ class TestSQLHandler:
         except ApplicationException as e:
             assert False, e.message
 
+    @pytest.mark.unit
     def test_select_single_table_no_conditions(self):
         try:
             sql_handler = SQLSelectSchemaQueryHandler(
@@ -455,7 +469,9 @@ class TestSQLHandler:
                 "postgres",
             )
             log.info(
-                f"sql-x: {sql_handler.sql}, placeholders: {sql_handler.placeholders}"  # noqa E501
+                "sql-x: %s, placeholders: %s",
+                sql_handler.sql,
+                sql_handler.placeholders,  # noqa E501
             )
 
             assert (
@@ -467,6 +483,7 @@ class TestSQLHandler:
         except ApplicationException as e:
             assert False, e.message
 
+    @pytest.mark.integration
     def test_delete(self, chinook_env):
         schema_object = get_schema_object("playlist_track")
         assert schema_object is not None
@@ -484,7 +501,7 @@ class TestSQLHandler:
             "postgres",
         )
 
-        log.info(f"sql: {sql_handler.sql}, placeholders: {sql_handler.placeholders}")
+        log.info("sql: %s, placeholders: %s", sql_handler.sql, sql_handler.placeholders)
 
         assert (
             sql_handler.sql
@@ -492,6 +509,7 @@ class TestSQLHandler:
         )
         assert sql_handler.placeholders == {"playlist_id": 2}
 
+    @pytest.mark.unit
     def test_relation_search_condition(self):
         load_api(os.path.join(os.getcwd(), "resources/api_spec.yaml"))
         operation = Operation(
@@ -503,7 +521,7 @@ class TestSQLHandler:
         schema_object = get_schema_object("invoice")
         sql_handler = SQLSelectSchemaQueryHandler(operation, schema_object, "postgres")
 
-        log.info(f"sql_handler: {sql_handler.sql}")
+        log.info("sql_handler: %s", sql_handler.sql)
         assert (
             sql_handler.sql
             == "SELECT i.billing_address, i.billing_city, i.billing_country, i.billing_postal_code, i.billing_state, "
@@ -521,7 +539,7 @@ class TestSQLHandler:
             SQLSelectSchemaQueryHandler(operation, schema_object, "postgres"),
         )
 
-        log.info(f"subselect_sql_generator: {subselect_sql_generator.sql}")
+        log.info("subselect_sql_generator: %s", subselect_sql_generator.sql)
         assert (
             subselect_sql_generator.sql
             == "SELECT invoice_id, invoice_line_id, quantity, track_id, unit_price "
@@ -530,7 +548,7 @@ class TestSQLHandler:
         )
 
         select_map = subselect_sql_generator.selection_results
-        log.info(f"select_map: {select_map}")
+        log.info("select_map: %s", select_map)
 
     def test_relation_subselect_qualifies_parent_key(self):
         parent_schema = SchemaObject(
