@@ -82,6 +82,17 @@ class SQLInsertSchemaQueryHandler(SQLSchemaQueryHandler):
 
         import json
 
+        for property_name, property in self.schema_object.properties.items():
+            inject_value = getattr(property, "inject_value", None)
+            inject_on = getattr(property, "inject_on", None) or []
+            if not inject_value or "create" not in inject_on:
+                continue
+            if property_name in self.operation.store_params:
+                raise ApplicationException(
+                    403,
+                    f"Property '{property_name}' is auto-injected and cannot be set manually",
+                )
+
         for name, value in self.operation.store_params.items():
             parts = name.split(".")
 
@@ -114,6 +125,21 @@ class SQLInsertSchemaQueryHandler(SQLSchemaQueryHandler):
                 self.store_placeholders[
                     property.api_name
                 ] = property.convert_to_db_value(value)
+
+        for property_name, property in self.schema_object.properties.items():
+            inject_value = getattr(property, "inject_value", None)
+            inject_on = getattr(property, "inject_on", None) or []
+            if not inject_value or "create" not in inject_on:
+                continue
+            if property_name in self.store_placeholders:
+                continue
+
+            injected_value = self.extract_injected_value(property)
+            columns.append(property.column_name)
+            placeholders.append(self.placeholder(property, property.api_name))
+            self.store_placeholders[property.api_name] = property.convert_to_db_value(
+                injected_value
+            )
 
         if self.key_property:
             if self.key_property.key_type == "sequence":

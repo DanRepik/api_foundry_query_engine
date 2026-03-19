@@ -53,6 +53,17 @@ class SQLUpdateSchemaQueryHandler(SQLSchemaQueryHandler):
 
         import json
 
+        for property_name, property in self.schema_object.properties.items():
+            inject_value = getattr(property, "inject_value", None)
+            inject_on = getattr(property, "inject_on", None) or []
+            if not inject_value:
+                continue
+            if property_name in self.operation.store_params:
+                raise ApplicationException(
+                    403,
+                    f"Property '{property_name}' is auto-injected and cannot be set manually",
+                )
+
         for name, value in self.operation.store_params.items():
             property = allowed_properties.get(name, None)
             if property is None:
@@ -72,6 +83,20 @@ class SQLUpdateSchemaQueryHandler(SQLSchemaQueryHandler):
                 self.store_placeholders[placeholder] = property.convert_to_db_value(
                     value
                 )
+
+        for property_name, property in self.schema_object.properties.items():
+            inject_value = getattr(property, "inject_value", None)
+            inject_on = getattr(property, "inject_on", None) or []
+            if not inject_value or "update" not in inject_on:
+                continue
+
+            placeholder = (
+                str(property.api_name) if property.api_name is not None else property_name
+            )
+            columns.append(f"{property.column_name} = {self.placeholder(property, placeholder)}")
+            self.store_placeholders[placeholder] = property.convert_to_db_value(
+                self.extract_injected_value(property)
+            )
 
         if invalid_columns:
             raise ApplicationException(

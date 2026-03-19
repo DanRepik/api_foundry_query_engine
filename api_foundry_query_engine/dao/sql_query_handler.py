@@ -1,4 +1,6 @@
 import re
+import os
+import uuid
 from typing import Optional, List, Dict
 from datetime import datetime, date
 
@@ -210,6 +212,35 @@ class SQLQueryHandler:
     @property
     def selection_results(self) -> Dict:
         raise NotImplementedError()
+
+    def extract_injected_value(
+        self, property: SchemaObjectProperty
+    ) -> Optional[object]:
+        inject_value = getattr(property, "inject_value", None)
+        if not inject_value:
+            return None
+
+        if inject_value.startswith("claim:"):
+            claim_name = inject_value.split(":", 1)[1]
+            return self.operation.claims.get(claim_name)
+
+        if inject_value == "timestamp":
+            return datetime.utcnow().isoformat()
+
+        if inject_value == "date":
+            return date.today().isoformat()
+
+        if inject_value == "uuid":
+            return str(uuid.uuid4())
+
+        if inject_value.startswith("env:"):
+            env_name = inject_value.split(":", 1)[1]
+            return os.getenv(env_name)
+
+        raise ApplicationException(
+            500,
+            f"Unsupported inject_value source '{inject_value}' for property '{property.api_name}'",
+        )
 
     def generate_sql_condition(
         self, property: SchemaObjectProperty, value, prefix: Optional[str] = None
