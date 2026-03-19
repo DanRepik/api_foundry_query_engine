@@ -6,18 +6,16 @@ from api_foundry_query_engine.utils.logger import logger
 from api_foundry_query_engine.operation import Operation
 from api_foundry_query_engine.services.transactional_service import TransactionalService
 
-from test_fixtures import load_model, db_secrets  # noqa F401
-
 log = logger(__name__)
 
 
 class TestTransactionalService:
-    def test_crud_service(self, load_model, db_secrets):  # noqa F811
+    def test_crud_service(self, chinook_env):  # noqa F811
         """
         Integration test to check insert
         """
         # test insert/create
-        result = TransactionalService().execute(
+        result = TransactionalService(chinook_env).execute(
             Operation(
                 entity="media_type",
                 action="create",
@@ -34,7 +32,7 @@ class TestTransactionalService:
             action="read",
             query_params={"media_type_id": media_type_id},
         )
-        result = TransactionalService().execute(operation)
+        result = TransactionalService(chinook_env).execute(operation)
 
         log.info(f"result: {result}")
         log.info(f"result: {json.dumps(result, indent=4)}")
@@ -49,7 +47,7 @@ class TestTransactionalService:
             store_params={"name": "Ray gun"},
         )
 
-        result = TransactionalService().execute(operation)
+        result = TransactionalService(chinook_env).execute(operation)
 
         log.info(f"result: {json.dumps(result, indent=4)}")
         assert len(result) == 1
@@ -62,7 +60,7 @@ class TestTransactionalService:
             query_params={"media_type_id": media_type_id},
         )
 
-        result = TransactionalService().execute(operation)
+        result = TransactionalService(chinook_env).execute(operation)
 
         log.info(f"result: {json.dumps(result, indent=4)}")
         assert len(result) == 1
@@ -75,13 +73,13 @@ class TestTransactionalService:
             action="read",
             query_params={"media_type_id": media_type_id},
         )
-        result = TransactionalService().execute(operation)
+        result = TransactionalService(chinook_env).execute(operation)
 
         log.info(f"result: {result}")
         log.info(f"result: {json.dumps(result, indent=4)}")
         assert len(result) == 0
 
-    def test_crud_with_timestamp_service(self, load_model, db_secrets):  # noqa F811
+    def test_crud_with_timestamp_service(self, chinook_env):  # noqa F811
         """
         Integration test to check insert
         """
@@ -101,7 +99,7 @@ class TestTransactionalService:
             },
         )
 
-        result = TransactionalService().execute(operation)
+        result = TransactionalService(chinook_env).execute(operation)
         log.info(f"result: {json.dumps(result, indent=4)}")
         assert result[0]["billing_address"] == "address"
 
@@ -114,7 +112,7 @@ class TestTransactionalService:
             query_params={"invoice_id": invoice_id},
             metadata_params={"properties": ".* customer:.* invoice_line_items:.*"},
         )
-        result = TransactionalService().execute(operation)
+        result = TransactionalService(chinook_env).execute(operation)
 
         log.info(f"result: {result}")
         log.info(f"result: {json.dumps(result, indent=4)}")
@@ -131,7 +129,7 @@ class TestTransactionalService:
                 query_params={"invoice_id": invoice_id},
             )
 
-            result = TransactionalService().execute(operation)
+            result = TransactionalService(chinook_env).execute(operation)
             assert len(result) == 1
         except ApplicationException as e:
             assert (
@@ -150,7 +148,7 @@ class TestTransactionalService:
             store_params={"billing_address": "updated address"},
         )
 
-        result = TransactionalService().execute(operation)
+        result = TransactionalService(chinook_env).execute(operation)
 
         log.info(f"result: {json.dumps(result, indent=4)}")
         assert len(result) == 1
@@ -164,7 +162,7 @@ class TestTransactionalService:
                 query_params={"invoice_id": invoice_id},
             )
 
-            result = TransactionalService().execute(operation)
+            result = TransactionalService(chinook_env).execute(operation)
             assert False, "Exception not thrown"
         except ApplicationException as e:
             assert (
@@ -182,7 +180,7 @@ class TestTransactionalService:
             },
         )
 
-        result = TransactionalService().execute(operation)
+        result = TransactionalService(chinook_env).execute(operation)
 
         log.info(f"result: {json.dumps(result, indent=4)}")
         assert len(result) == 1
@@ -195,13 +193,13 @@ class TestTransactionalService:
             action="read",
             query_params={"invoice_id": invoice_id},
         )
-        result = TransactionalService().execute(operation)
+        result = TransactionalService(chinook_env).execute(operation)
 
         log.info(f"result: {result}")
         log.info(f"result: {json.dumps(result, indent=4)}")
         assert len(result) == 0
 
-    def test_crud_with_uuid_service(self, load_model, db_secrets):  # noqa F811
+    def test_crud_with_uuid_service(self, chinook_env):  # noqa F811
         """
         Integration test to check insert
         """
@@ -225,7 +223,7 @@ class TestTransactionalService:
             },
         )
 
-        result = TransactionalService().execute(operation)
+        result = TransactionalService(chinook_env).execute(operation)
         log.info(f"result: {json.dumps(result, indent=4)}")
         assert result[0]["address"] == "123 Main St"
 
@@ -237,7 +235,7 @@ class TestTransactionalService:
             action="read",
             query_params={"customer_id": customer_id},
         )
-        result = TransactionalService().execute(operation)
+        result = TransactionalService(chinook_env).execute(operation)
 
         log.info(f"result: {result}")
         log.info(f"result: {json.dumps(result, indent=4)}")
@@ -253,7 +251,7 @@ class TestTransactionalService:
                 store_params={"address": "321 Broad St"},
             )
 
-            result = TransactionalService().execute(operation)
+            result = TransactionalService(chinook_env).execute(operation)
             assert False, "Expecting exception"
         except ApplicationException as e:
             assert (
@@ -272,7 +270,7 @@ class TestTransactionalService:
             store_params={"address": "321 Broad St"},
         )
 
-        result = TransactionalService().execute(operation)
+        result = TransactionalService(chinook_env).execute(operation)
 
         log.info(f"result: {json.dumps(result, indent=4)}")
         assert len(result) == 1
@@ -286,7 +284,7 @@ class TestTransactionalService:
                 query_params={"customer_id": customer_id},
             )
 
-            result = TransactionalService().execute(operation)
+            result = TransactionalService(chinook_env).execute(operation)
             assert False, "Expecting exception"
         except ApplicationException as e:
             assert (
@@ -305,7 +303,7 @@ class TestTransactionalService:
             },
         )
 
-        result = TransactionalService().execute(operation)
+        result = TransactionalService(chinook_env).execute(operation)
 
         log.info(f"result: {json.dumps(result, indent=4)}")
         assert len(result) == 1
@@ -317,7 +315,7 @@ class TestTransactionalService:
             action="read",
             query_params={"customer_id": customer_id},
         )
-        result = TransactionalService().execute(operation)
+        result = TransactionalService(chinook_env).execute(operation)
 
         log.info(f"result: {result}")
         log.info(f"result: {json.dumps(result, indent=4)}")

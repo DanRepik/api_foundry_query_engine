@@ -1,16 +1,32 @@
 from typing import Union
 
 from api_foundry_query_engine.dao.sql_custom_query_handler import SQLCustomQueryHandler
-from api_foundry_query_engine.dao.sql_delete_query_handler import SQLDeleteSchemaQueryHandler
-from api_foundry_query_engine.dao.sql_insert_query_handler import SQLInsertSchemaQueryHandler
-from api_foundry_query_engine.dao.sql_select_query_handler import SQLSelectSchemaQueryHandler
-from api_foundry_query_engine.dao.sql_subselect_query_handler import SQLSubselectSchemaQueryHandler
-from api_foundry_query_engine.dao.sql_update_query_handler import SQLUpdateSchemaQueryHandler
+from api_foundry_query_engine.dao.sql_delete_query_handler import (
+    SQLDeleteSchemaQueryHandler,
+)
+from api_foundry_query_engine.dao.sql_insert_query_handler import (
+    SQLInsertSchemaQueryHandler,
+)
+from api_foundry_query_engine.dao.sql_select_query_handler import (
+    SQLSelectSchemaQueryHandler,
+)
+from api_foundry_query_engine.dao.sql_subselect_query_handler import (
+    SQLSubselectSchemaQueryHandler,
+)
+from api_foundry_query_engine.dao.sql_update_query_handler import (
+    SQLUpdateSchemaQueryHandler,
+)
+from api_foundry_query_engine.dao.sql_restore_query_handler import (
+    SQLRestoreSchemaQueryHandler,
+)
 from api_foundry_query_engine.utils.app_exception import ApplicationException
 from api_foundry_query_engine.dao.dao import DAO
 from api_foundry_query_engine.connectors.connection import Cursor
 from api_foundry_query_engine.operation import Operation
-from api_foundry_query_engine.utils.api_model import get_schema_object, get_path_operation
+from api_foundry_query_engine.utils.api_model import (
+    get_path_operation,
+    get_schema_object,
+)
 from api_foundry_query_engine.dao.sql_query_handler import SQLQueryHandler
 
 
@@ -47,6 +63,10 @@ class OperationDAO(DAO):
                 return self._query_handler
 
             schema_object = get_schema_object(self.operation.entity)
+            if not schema_object:
+                raise ApplicationException(
+                    500, f"Unknown operation: {self.operation.entity}"
+                )
             if self.operation.action == "read":
                 self._query_handler = SQLSelectSchemaQueryHandler(
                     self.operation, schema_object, self.engine
@@ -63,31 +83,56 @@ class OperationDAO(DAO):
                 self._query_handler = SQLDeleteSchemaQueryHandler(
                     self.operation, schema_object, self.engine
                 )
+            elif self.operation.action == "restore":
+                self._query_handler = SQLRestoreSchemaQueryHandler(
+                    self.operation, schema_object, self.engine
+                )
             else:
                 raise ApplicationException(
                     400, f"Invalid operation action: {self.operation.action}"
                 )
         return self._query_handler
 
-    def execute(self, cursor: Cursor) -> Union[list[dict], dict]:
+    def execute(self, connector, operation=None) -> Union[list[dict], dict]:
         """
-        Execute the database operation based on the provided cursor.
+        Execute the database operation based on the provided connector.
 
         Args:
-            cursor (Cursor): The database cursor.
+            connector (Connection): The database connection.
+            operation (Operation, optional): The operation to perform.
 
         Returns:
             list[dict]: A list of dictionaries containing the results
             of the operation.
         """
 
+        # Use self.operation if operation is not provided
+        op = operation if operation is not None else self.operation
+
+        # Check if this is a batch operation
+        if op.entity == "batch" and op.action == "create":
+            from api_foundry_query_engine.dao.batch_operation_handler import (
+                BatchOperationHandler,
+            )
+
+            # Extract batch request from store_params
+            batch_request = op.store_params
+
+            # Execute batch
+            handler = BatchOperationHandler(batch_request, connector, self.engine)
+            return handler.execute()
+
+        # Standard operation handling
+        # Assume connector has a 'cursor()' method to get a Cursor
+        cursor = connector.cursor()
+
         result = self.__fetch_record_set(self.query_handler, cursor)
 
-        if self.operation.action == "read":
-            if self.operation.metadata_params.get("count", False):
+        if op.action == "read":
+            if op.metadata_params.get("count", False):
                 return result[0]
             self.__fetch_many(result, cursor)
-        elif self.operation.action in ["update", "delete"] and len(result) == 0:
+        elif op.action in ["update", "delete", "restore"] and len(result) == 0:
             raise ApplicationException(400, "No records were modified")
 
         return result

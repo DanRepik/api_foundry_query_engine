@@ -9,7 +9,7 @@ def proto_event(
     method: str = "GET",
     resource: str = "/accounts",
     path: str = "/accounts",
-):
+) -> dict[str, object]:
     return {
         "resource": resource,
         "path": path,

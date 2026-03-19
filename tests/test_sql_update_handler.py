@@ -43,7 +43,8 @@ class TestUpdateSQLHandler:
             == "UPDATE invoice "
             + "SET invoice_date = %(invoice_date)s, total = %(total)s, version_stamp = gen_random_uuid()  "
             + "WHERE customer_id = %(customer_id)s AND version_stamp = %(version_stamp)s "
-            + "RETURNING billing_address, billing_city, billing_country, billing_postal_code, billing_state, customer_id, invoice_date, invoice_id, version_stamp, total"
+            + "RETURNING billing_address, billing_city, billing_country, billing_postal_code, "
+            + "billing_state, customer_id, invoice_date, invoice_id, version_stamp, total"
         )
         assert sql_handler.placeholders == {
             "customer_id": 2,
@@ -91,10 +92,11 @@ class TestUpdateSQLHandler:
 
         assert (
             sql_handler.sql
-            == "UPDATE invoice " 
-            + "SET invoice_date = %(invoice_date)s, total = %(total)s " 
+            == "UPDATE invoice "
+            + "SET invoice_date = %(invoice_date)s, total = %(total)s "
             + "WHERE customer_id IN (%(customer_id_0)s, %(customer_id_1)s, %(customer_id_2)s) "
-            + "RETURNING billing_address, billing_city, billing_country, billing_postal_code, billing_state, customer_id, invoice_date, invoice_id, total"
+            + "RETURNING billing_address, billing_city, billing_country, billing_postal_code, "
+            + "billing_state, customer_id, invoice_date, invoice_id, total"
         )
         assert sql_handler.placeholders == {
             "customer_id_0": 3,
@@ -123,10 +125,11 @@ class TestUpdateSQLHandler:
 
         assert (
             sql_handler.sql
-            == "UPDATE invoice " 
-                + "SET invoice_date = %(invoice_date)s, total = %(total)s, last_updated = CURRENT_TIMESTAMP  " 
-                + "WHERE customer_id = %(customer_id)s AND last_updated = %(last_updated)s " 
-                + "RETURNING billing_address, billing_city, billing_country, billing_postal_code, billing_state, customer_id, invoice_date, invoice_id, last_updated, total"
+            == "UPDATE invoice "
+            + "SET invoice_date = %(invoice_date)s, total = %(total)s, last_updated = CURRENT_TIMESTAMP  "
+            + "WHERE customer_id = %(customer_id)s AND last_updated = %(last_updated)s "
+            + "RETURNING billing_address, billing_city, billing_country, billing_postal_code, billing_state, "
+            + "customer_id, invoice_date, invoice_id, last_updated, total"
         )
         assert sql_handler.placeholders == {
             "customer_id": 2,

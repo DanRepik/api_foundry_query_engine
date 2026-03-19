@@ -9,52 +9,78 @@ class PostgresCursor(Cursor):
     def __init__(self, cursor):
         self.__cursor = cursor
 
-    def execute(self, sql: str, parameters: dict, result_columns: list[str]) -> list:
+    def execute(self, sql: str, params: dict, selection_results: dict) -> list[dict]:
         """
         Execute SQL statements on the PostgreSQL database.
 
         Parameters:
         - cursor: The database cursor.
         - sql (str): The SQL statement to execute.
-        - parameters (dict): Parameters to be used in the SQL statement.
+        - params (dict): Parameters to be used in the SQL statement.
+        - selection_results (dict): Mapping of result columns.
 
         Returns:
-        - None
+        - list[dict]: List of result records as dictionaries.
 
         Raises:
         - AppException: Custom exception for handling database-related errors.
         """
         from psycopg2 import Error, IntegrityError, ProgrammingError
 
-        log.info(f"sql: {sql}, parameters: {parameters}")
+        log.info("sql: %s", sql)
 
         try:
             # Execute the SQL statement with parameters
-            log.info(f"sql: {self.__cursor.mogrify(sql, parameters)}")
-            self.__cursor.execute(sql, parameters)
+            self.__cursor.execute(sql, params)
             result = []
             for record in self.__cursor:
-                # Convert record tuple to dictionary using result_columns
+                # Convert record tuple to dictionary using selection_results
                 result.append(
-                    {col: value for col, value in zip(result_columns, record)}
+                    {col: value for col, value in zip(selection_results, record)}
                 )
 
             return result
         except IntegrityError as err:
             # Handle integrity constraint violation (e.g., duplicate key)
-            raise Exception(409, err.pgerror)
+            from api_foundry_query_engine.utils.app_exception import (
+                ApplicationException,
+            )
+
+            raise ApplicationException(409, err.pgerror)
         except ProgrammingError as err:
             # Handle programming errors (e.g., syntax error in SQL)
-            raise Exception(400, err.pgerror)
+            from api_foundry_query_engine.utils.app_exception import (
+                ApplicationException,
+            )
+
+            raise ApplicationException(400, err.pgerror)
         except Error as err:
             # Handle other database errors
-            raise Exception(500, err.pgerror)
+            from api_foundry_query_engine.utils.app_exception import (
+                ApplicationException,
+            )
+
+            raise ApplicationException(500, err.pgerror)
 
     def close(self):
         self.__cursor.close()
 
 
 class PostgresConnection(Connection):
+    """
+    PostgreSQL database connection wrapper.
+
+    Supports two configuration formats:
+    1. DSN-based (preferred for testing with fixture_foundry):
+       {"dsn": "postgresql://user:pass@host:port/dbname"}
+
+    2. Individual parameters (for production AWS Secrets Manager):
+       {"host": "...", "port": 5432, "database": "...", "username": "...", "password": "..."}
+
+    The get_connection() method prioritizes DSN if present, otherwise builds connection
+    from individual parameters.
+    """
+
     def __init__(self, db_config: dict) -> None:
         super().__init__(db_config)
         self.__connection = self.get_connection()
@@ -67,6 +93,9 @@ class PostgresConnection(Connection):
 
     def commit(self):
         self.__connection.commit()
+
+    def rollback(self):
+        self.__connection.rollback()
 
     def get_connection(self):
         """
@@ -81,10 +110,16 @@ class PostgresConnection(Connection):
         """
         from psycopg2 import connect
 
-        dbname = self.db_config["dbname"]
+        # If DSN is provided, use it directly (simplifies fixture_foundry integration)
+        if "dsn" in self.db_config:
+            log.info("Connecting using DSN: %s", self.db_config["dsn"])
+            return connect(self.db_config["dsn"])
+
+        # Otherwise, build connection from individual parameters
+        dbname = self.db_config["database"]
         user = self.db_config["username"]
         password = self.db_config["password"]
-        host = self.db_config["host"]
+        host = self.db_config.get("host", "localhost")
         port = self.db_config.get("port", 5432)
         additional_config = self.db_config.get("configuration", {})
 
@@ -99,7 +134,9 @@ class PostgresConnection(Connection):
 
         connection_params.update(additional_config)
 
-        log.info(f"connection_params: {connection_params}")
+        log.info(
+            f"connection_params: dbname: {dbname}, user: {user}, host: {host}, port: {port}"
+        )
 
         # Create a connection to the PostgreSQL database
         return connect(**connection_params)
