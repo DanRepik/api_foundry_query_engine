@@ -2,8 +2,10 @@ import pytest
 
 from datetime import date, datetime, timezone
 import os
+from types import SimpleNamespace
 
 from api_foundry_query_engine.utils.api_model import get_schema_object
+from api_foundry_query_engine.utils import api_model as api_model_module
 from api_foundry_query_engine.dao.operation_dao import OperationDAO
 from api_foundry_query_engine.dao.sql_delete_query_handler import (
     SQLDeleteSchemaQueryHandler,
@@ -15,7 +17,7 @@ from api_foundry_query_engine.dao.sql_subselect_query_handler import (
     SQLSubselectSchemaQueryHandler,
 )
 from api_foundry_query_engine.utils.app_exception import ApplicationException
-from api_foundry_query_engine.utils.api_model import SchemaObjectProperty
+from api_foundry_query_engine.utils.api_model import SchemaObject, SchemaObjectProperty
 from api_foundry_query_engine.operation import Operation
 from api_foundry_query_engine.utils.logger import logger
 import copy
@@ -529,6 +531,90 @@ class TestSQLHandler:
 
         select_map = subselect_sql_generator.selection_results
         log.info(f"select_map: {select_map}")
+
+    def test_relation_subselect_qualifies_parent_key(self):
+        parent_schema = SchemaObject(
+            {
+                "api_name": "track",
+                "database": "chinook",
+                "primary_key": "track_id",
+                "table_name": "track",
+                "properties": {
+                    "track_id": {
+                        "api_name": "track_id",
+                        "api_type": "integer",
+                        "column_name": "track_id",
+                        "column_type": "integer",
+                    },
+                    "genre_id": {
+                        "api_name": "genre_id",
+                        "api_type": "integer",
+                        "column_name": "genre_id",
+                        "column_type": "integer",
+                    },
+                    "name": {
+                        "api_name": "name",
+                        "api_type": "string",
+                        "column_name": "name",
+                        "column_type": "string",
+                    },
+                },
+                "relations": {
+                    "genre": {
+                        "api_name": "genre",
+                        "schema_name": "genre",
+                        "type": "object",
+                        "child_property": "genre_id",
+                        "parent_property": "genre_id",
+                    }
+                },
+            }
+        )
+        child_schema = SchemaObject(
+            {
+                "api_name": "genre",
+                "database": "chinook",
+                "primary_key": "genre_id",
+                "table_name": "genre",
+                "properties": {
+                    "genre_id": {
+                        "api_name": "genre_id",
+                        "api_type": "integer",
+                        "column_name": "genre_id",
+                        "column_type": "integer",
+                    },
+                    "name": {
+                        "api_name": "name",
+                        "api_type": "string",
+                        "column_name": "name",
+                        "column_type": "string",
+                    },
+                },
+            }
+        )
+        api_model_module.api_model = SimpleNamespace(
+            schema_objects={"track": parent_schema, "genre": child_schema},
+            path_operations={},
+        )
+
+        operation = Operation(
+            entity="track",
+            action="read",
+            query_params={"genre.genre_id": "5"},
+            metadata_params={"properties": ".* genre:.*"},
+        )
+        parent_generator = SQLSelectSchemaQueryHandler(operation, parent_schema, "postgres")
+        _ = parent_generator.selection_results
+        subselect_generator = SQLSubselectSchemaQueryHandler(
+            operation,
+            parent_schema.relations["genre"],
+            parent_generator,
+        )
+
+        assert (
+            subselect_generator.sql
+            == "SELECT genre_id, name FROM genre WHERE genre_id IN ( SELECT t.genre_id FROM track AS t INNER JOIN genre AS g ON t.genre_id = g.genre_id WHERE g.genre_id = %(g_genre_id)s )"
+        )
 
 
 @pytest.mark.unit
