@@ -1,3 +1,4 @@
+import json
 from typing import Dict, Optional
 from api_foundry_query_engine.dao.sql_query_handler import SQLSchemaQueryHandler
 from api_foundry_query_engine.operation import Operation
@@ -11,9 +12,7 @@ log = logger(__name__)
 class SQLInsertSchemaQueryHandler(SQLSchemaQueryHandler):
     key_property: Optional[SchemaObjectProperty]
 
-    def __init__(
-        self, operation: Operation, schema_object: SchemaObject, engine: str
-    ) -> None:
+    def __init__(self, operation: Operation, schema_object: SchemaObject, engine: str) -> None:
         super().__init__(operation, schema_object, engine)
         self.key_property = schema_object.primary_key
         if self.key_property:
@@ -32,9 +31,7 @@ class SQLInsertSchemaQueryHandler(SQLSchemaQueryHandler):
                         + f" required. schema_object: {schema_object.api_name}",
                     )
         self.concurrency_property = schema_object.concurrency_property
-        if self.concurrency_property and operation.store_params.get(
-            self.concurrency_property.api_name
-        ):
+        if self.concurrency_property and operation.store_params.get(self.concurrency_property.api_name):
             raise ApplicationException(
                 400,
                 "Versioned properties can not be supplied a store parameters. "
@@ -61,7 +58,9 @@ class SQLInsertSchemaQueryHandler(SQLSchemaQueryHandler):
                 self.schema_object.properties,
             )
             # Combine both (union of read and write)
-            self._insert_selection_results = {**read_props, **write_props}
+            combined = {**read_props, **write_props}
+            filters = self.operation.metadata_params.get("_properties", ".*").split()
+            self._insert_selection_results = self.filter_and_prefix_keys(filters, combined)
         return self._insert_selection_results
 
     @property
@@ -72,10 +71,7 @@ class SQLInsertSchemaQueryHandler(SQLSchemaQueryHandler):
         returning_clause = self._get_returning_clause()
 
         if not self.concurrency_property:
-            return (
-                f"INSERT INTO {self.table_expression}{self.insert_values} "
-                + returning_clause
-            )
+            return f"INSERT INTO {self.table_expression}{self.insert_values} " + returning_clause
 
         if self.operation.store_params.get(self.concurrency_property.api_name):
             raise ApplicationException(
@@ -85,10 +81,7 @@ class SQLInsertSchemaQueryHandler(SQLSchemaQueryHandler):
                 + f"  schema_object: {self.schema_object.api_name}, "
                 + f"property: {self.concurrency_property.api_name}",
             )
-        return (
-            f"INSERT INTO {self.table_expression}{self.insert_values}"
-            + returning_clause
-        )
+        return f"INSERT INTO {self.table_expression}{self.insert_values} " + returning_clause
 
     def _get_returning_clause(self) -> str:
         """
@@ -121,22 +114,18 @@ class SQLInsertSchemaQueryHandler(SQLSchemaQueryHandler):
         allowed_property_names = self.check_permissions(
             "write", self.schema_object.permissions, self.schema_object.properties
         )
-        allowed_properties = {
-            k: v
-            for k, v in self.schema_object.properties.items()
-            if k in allowed_property_names
-        }
+        allowed_properties = {k: v for k, v in self.schema_object.properties.items() if k in allowed_property_names}
         log.info("allowed properties: %s", allowed_properties)
 
-        import json
-
-        # First, validate that user is not trying to set injected properties
         for property_name, property in self.schema_object.properties.items():
-            if property.inject_value and property_name in self.operation.store_params:
+            inject_value = getattr(property, "inject_value", None)
+            inject_on = getattr(property, "inject_on", None) or []
+            if not inject_value or "create" not in inject_on:
+                continue
+            if property_name in self.operation.store_params:
                 raise ApplicationException(
                     403,
-                    f"Property '{property_name}' is auto-injected and "
-                    + "cannot be set manually",
+                    f"Property '{property_name}' is auto-injected and cannot be set manually",
                 )
 
         for name, value in self.operation.store_params.items():
@@ -160,36 +149,33 @@ class SQLInsertSchemaQueryHandler(SQLSchemaQueryHandler):
 
             columns.append(property.column_name)
             if property.api_name is None:
-                raise ApplicationException(
-                    400, f"Property '{name}' does not have a valid api_name."
-                )
+                raise ApplicationException(400, f"Property '{name}' does not have a valid api_name.")
             placeholders.append(self.placeholder(property, property.api_name))
             # Serialize embedded objects to JSON
             if property.api_type == "object":
                 self.store_placeholders[property.api_name] = json.dumps(value)
             else:
-                self.store_placeholders[
-                    property.api_name
-                ] = property.convert_to_db_value(value)
+                self.store_placeholders[property.api_name] = property.convert_to_db_value(value)
 
-        # Inject values from claims/timestamps/etc for properties with
-        # x-af-inject-value on CREATE
         for property_name, property in self.schema_object.properties.items():
-            if property.inject_value and "create" in property.inject_on:
-                injected_value = self.extract_injected_value(property.inject_value)
-                if injected_value is not None:
-                    placeholder_key = f"__inject_{property_name}"
-                    columns.append(property.column_name)
-                    placeholders.append(self.placeholder(property, placeholder_key))
-                    self.store_placeholders[
-                        placeholder_key
-                    ] = property.convert_to_db_value(injected_value)
-                elif property.required:
-                    raise ApplicationException(
-                        400,
-                        f"Required injected property '{property_name}' "
-                        + f"could not be populated from '{property.inject_value}'",
-                    )
+            inject_value = getattr(property, "inject_value", None)
+            inject_on = getattr(property, "inject_on", None) or []
+            if not inject_value or "create" not in inject_on:
+                continue
+            if property_name in self.store_placeholders:
+                continue
+
+            # Preserve legacy placeholder names for writable injected fields
+            # while using the API name for non-writable injected fields.
+            placeholder_name = (
+                f"__inject_{property_name}"
+                if property_name in allowed_properties
+                else (str(property.api_name) if property.api_name is not None else property_name)
+            )
+            injected_value = self.extract_injected_value(str(inject_value))
+            columns.append(property.column_name)
+            placeholders.append(self.placeholder(property, placeholder_name))
+            self.store_placeholders[placeholder_name] = property.convert_to_db_value(injected_value)
 
         if self.key_property:
             if self.key_property.key_type == "sequence":
@@ -201,8 +187,6 @@ class SQLInsertSchemaQueryHandler(SQLSchemaQueryHandler):
             if self.concurrency_property.column_type == "integer":
                 placeholders.append("1")
             else:
-                placeholders.append(
-                    self.concurrency_generator(self.concurrency_property)
-                )
+                placeholders.append(self.concurrency_generator(self.concurrency_property))
 
         return f" ( {', '.join(columns)} ) VALUES ( {', '.join(placeholders)})"

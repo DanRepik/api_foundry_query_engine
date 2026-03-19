@@ -1,3 +1,4 @@
+import json
 import re
 from typing import Match
 from api_foundry_query_engine.dao.sql_query_handler import SQLSchemaQueryHandler
@@ -7,9 +8,7 @@ from api_foundry_query_engine.utils.api_model import SchemaObject
 
 
 class SQLUpdateSchemaQueryHandler(SQLSchemaQueryHandler):
-    def __init__(
-        self, operation: Operation, schema_object: SchemaObject, engine: str
-    ) -> None:
+    def __init__(self, operation: Operation, schema_object: SchemaObject, engine: str) -> None:
         super().__init__(operation, schema_object, engine)
 
     def _template_where(self, expr: str) -> str:
@@ -106,24 +105,20 @@ class SQLUpdateSchemaQueryHandler(SQLSchemaQueryHandler):
         allowed_property_names = self.check_permissions(
             "write", self.schema_object.permissions, self.schema_object.properties
         )
-        allowed_properties = {
-            k: v
-            for k, v in self.schema_object.properties.items()
-            if k in allowed_property_names
-        }
+        allowed_properties = {k: v for k, v in self.schema_object.properties.items() if k in allowed_property_names}
         self.store_placeholders = {}
         columns = []
         invalid_columns = []
 
-        import json
-
-        # First, validate that user is not trying to set injected properties
         for property_name, property in self.schema_object.properties.items():
-            if property.inject_value and property_name in self.operation.store_params:
+            inject_value = getattr(property, "inject_value", None)
+            inject_on = getattr(property, "inject_on", None) or []
+            if not inject_value:
+                continue
+            if property_name in self.operation.store_params:
                 raise ApplicationException(
                     403,
-                    f"Property '{property_name}' is auto-injected and "
-                    + "cannot be set manually",
+                    f"Property '{property_name}' is auto-injected and cannot be set manually",
                 )
 
         for name, value in self.operation.store_params.items():
@@ -132,9 +127,7 @@ class SQLUpdateSchemaQueryHandler(SQLSchemaQueryHandler):
                 invalid_columns.append(name)
                 continue
 
-            placeholder = (
-                str(property.api_name) if property.api_name is not None else name
-            )
+            placeholder = str(property.api_name) if property.api_name is not None else name
             column_name = property.column_name
 
             columns.append(f"{column_name} = {self.placeholder(property, placeholder)}")
@@ -142,36 +135,28 @@ class SQLUpdateSchemaQueryHandler(SQLSchemaQueryHandler):
             if property.api_type == "object":
                 self.store_placeholders[placeholder] = json.dumps(value)
             else:
-                self.store_placeholders[placeholder] = property.convert_to_db_value(
-                    value
-                )
+                self.store_placeholders[placeholder] = property.convert_to_db_value(value)
 
-        # Inject values from claims/timestamps/etc for properties with
-        # x-af-inject-value on UPDATE
         for property_name, property in self.schema_object.properties.items():
-            if property.inject_value and "update" in property.inject_on:
-                injected_value = self.extract_injected_value(property.inject_value)
-                if injected_value is not None:
-                    placeholder_key = f"__inject_{property_name}"
-                    column_name = property.column_name
-                    columns.append(
-                        f"{column_name} = {self.placeholder(property, placeholder_key)}"
-                    )
-                    self.store_placeholders[
-                        placeholder_key
-                    ] = property.convert_to_db_value(injected_value)
-                elif property.required:
-                    raise ApplicationException(
-                        400,
-                        f"Required injected property '{property_name}' "
-                        + f"could not be populated from '{property.inject_value}'",
-                    )
+            inject_value = getattr(property, "inject_value", None)
+            inject_on = getattr(property, "inject_on", None) or []
+            if not inject_value or "update" not in inject_on:
+                continue
+
+            placeholder = (
+                f"__inject_{property_name}"
+                if property_name in allowed_properties
+                else (str(property.api_name) if property.api_name is not None else property_name)
+            )
+            columns.append(f"{property.column_name} = {self.placeholder(property, placeholder)}")
+            self.store_placeholders[placeholder] = property.convert_to_db_value(
+                self.extract_injected_value(str(inject_value))
+            )
 
         if invalid_columns:
             raise ApplicationException(
                 403,
-                f"Subject does not have permission to update properties: "
-                f"{invalid_columns}",
+                f"Subject does not have permission to update properties: " f"{invalid_columns}",
             )
         return f" SET {', '.join(columns)}"
 

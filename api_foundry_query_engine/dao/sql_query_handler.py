@@ -1,4 +1,6 @@
 import re
+import os
+import uuid
 from typing import Optional, List, Dict
 from datetime import datetime, date
 
@@ -108,9 +110,7 @@ class SQLQueryHandler:
     operation: Operation
     engine: str
 
-    def __init__(
-        self, operation: Operation, engine: str
-    ):  # , schema_object: SchemaObject):
+    def __init__(self, operation: Operation, engine: str):  # , schema_object: SchemaObject):
         self.operation = operation
         self.engine = engine
         self.__select_list_columns = None
@@ -180,9 +180,7 @@ class SQLQueryHandler:
             List[str]: A list of properties the user is permitted to access.
         """
         # if permissions are not defined then no restrictions are applied
-        log.info(
-            f"checking permissions permission_type: {permission_type}, permissions: {permissions}"
-        )
+        log.info(f"checking permissions permission_type: {permission_type}, permissions: {permissions}")
         if not permissions:
             return properties
 
@@ -223,9 +221,7 @@ class SQLQueryHandler:
 
             if regex_pattern:
                 # Use efficient regex dictionary filtering
-                role_allowed = self._filter_properties_by_regex(
-                    properties, regex_pattern
-                )
+                role_allowed = self._filter_properties_by_regex(properties, regex_pattern)
                 log.info(
                     "role: %s, pattern: %s, matched: %s",
                     role,
@@ -284,9 +280,7 @@ class SQLQueryHandler:
 
             for action, rule in actions.items():
                 # Normalize action names: create/update -> write
-                normalized_action = (
-                    "write" if action in ("create", "update") else action
-                )
+                normalized_action = "write" if action in ("create", "update") else action
 
                 if normalized_action in normalized["default"]:
                     normalized["default"][normalized_action][role] = rule
@@ -330,9 +324,7 @@ class SQLQueryHandler:
             return permission_rule
         elif isinstance(permission_rule, dict):
             # Support both 'properties' (preferred) and 'fields' (legacy)
-            return permission_rule.get("properties") or permission_rule.get(
-                "fields", ""
-            )
+            return permission_rule.get("properties") or permission_rule.get("fields", "")
         else:
             return ""
 
@@ -340,9 +332,7 @@ class SQLQueryHandler:
     def selection_results(self) -> Dict:
         raise NotImplementedError()
 
-    def generate_sql_condition(
-        self, property: SchemaObjectProperty, value, prefix: Optional[str] = None
-    ) -> str:
+    def generate_sql_condition(self, property: SchemaObjectProperty, value, prefix: Optional[str] = None) -> str:
         operand = "="
         if isinstance(value, str):
             parts = value.split("::", 1)
@@ -354,9 +344,7 @@ class SQLQueryHandler:
             value_str = str(value)
 
         column = f"{prefix}.{property.column_name}" if prefix else property.column_name
-        placeholder_name = (
-            f"{prefix}_{property.api_name}" if prefix else property.api_name
-        )
+        placeholder_name = f"{prefix}_{property.api_name}" if prefix else property.api_name
 
         if operand in ["between", "not-between"]:
             value_set = value_str.split(",")
@@ -364,17 +352,14 @@ class SQLQueryHandler:
         elif operand in ["in", "not-in"]:
             value_set = value_str.split(",")
             assignments = [
-                self.placeholder(property, f"{placeholder_name}_{index}")
-                for index, _ in enumerate(value_set)
+                self.placeholder(property, f"{placeholder_name}_{index}") for index, _ in enumerate(value_set)
             ]
             sql = f"{column} {'NOT ' if operand == 'not-in' else ''}IN ({', '.join(assignments)})"  # noqa E501
         else:
             sql = f"{column} {operand} {self.placeholder(property, str(placeholder_name))}"
         return sql
 
-    def generate_placeholders(
-        self, property: SchemaObjectProperty, value, prefix: Optional[str] = None
-    ) -> dict:
+    def generate_placeholders(self, property: SchemaObjectProperty, value, prefix: Optional[str] = None) -> dict:
         operand = "="
 
         if isinstance(value, str):
@@ -386,9 +371,7 @@ class SQLQueryHandler:
         else:
             value_str = str(value)
 
-        placeholder_name = (
-            f"{prefix}_{property.api_name}" if prefix else property.api_name
-        )
+        placeholder_name = f"{prefix}_{property.api_name}" if prefix else property.api_name
         placeholders = {}
 
         if operand in ["between", "not-between"]:
@@ -428,9 +411,6 @@ class SQLQueryHandler:
         Raises:
             ApplicationException: If source format is invalid
         """
-        import os
-        import uuid
-
         if inject_value_source.startswith("claim:"):
             claim_key = inject_value_source[6:]
             return self.operation.claims.get(claim_key)
@@ -444,17 +424,13 @@ class SQLQueryHandler:
             env_key = inject_value_source[4:]
             return os.environ.get(env_key)
         else:
-            raise ApplicationException(
-                400, f"Unknown inject value source: {inject_value_source}"
-            )
+            raise ApplicationException(400, f"Unknown inject value source: {inject_value_source}")
 
 
 class SQLSchemaQueryHandler(SQLQueryHandler):
     schema_object: SchemaObject
 
-    def __init__(
-        self, operation: Operation, schema_object: SchemaObject, engine: str
-    ) -> None:
+    def __init__(self, operation: Operation, schema_object: SchemaObject, engine: str) -> None:
         super().__init__(operation, engine)
         self.schema_object = schema_object
         self.single_table = self.__single_table()
@@ -483,10 +459,7 @@ class SQLSchemaQueryHandler(SQLQueryHandler):
                 entity_lower = entity.lower()
                 for i in range(1, len(entity_lower) + 1):
                     substring = entity_lower[:i]
-                    if (
-                        substring not in self._prefix_map.values()
-                        and substring not in SQL_RESERVED_WORDS
-                    ):
+                    if substring not in self._prefix_map.values() and substring not in SQL_RESERVED_WORDS:
                         self._prefix_map[entity] = substring
                         break
         return self._prefix_map
@@ -526,9 +499,7 @@ class SQLSchemaQueryHandler(SQLQueryHandler):
             allowed_properties = self.check_permissions(
                 "read", self.schema_object.permissions, self.schema_object.properties
             )
-            self.__selection_results = self.filter_and_prefix_keys(
-                filters, allowed_properties
-            )
+            self.__selection_results = self.filter_and_prefix_keys(filters, allowed_properties)
         return self.__selection_results
 
     def _has_soft_delete_conflicts(self) -> Dict[str, bool]:
@@ -617,8 +588,7 @@ class SQLSchemaQueryHandler(SQLQueryHandler):
                 if excluded_values:
                     # Format values for SQL IN clause
                     formatted_values = ", ".join(
-                        f"'{val}'" if isinstance(val, str) else str(val)
-                        for val in excluded_values
+                        f"'{val}'" if isinstance(val, str) else str(val) for val in excluded_values
                     )
                     conditions.append(f"{column_name} NOT IN ({formatted_values})")
 
@@ -636,20 +606,14 @@ class SQLSchemaQueryHandler(SQLQueryHandler):
 
         for name, value in self.operation.query_params.items():
             if "." in name:
-                raise ApplicationException(
-                    400, "Selection on relations is not supported"
-                )
+                raise ApplicationException(400, "Selection on relations is not supported")
             property = self.schema_object.properties.get(name)
             if not property:
-                raise ApplicationException(
-                    500, f"Search condition column not found {name}"
-                )
+                raise ApplicationException(500, f"Search condition column not found {name}")
             if (
                 self.operation.action != "read"
                 and isinstance(value, str)
-                and re.match(
-                    r"^(lt|le|eq|ne|gt|ge|in|not-in|between|not-between)::(.+)$", value
-                )
+                and re.match(r"^(lt|le|eq|ne|gt|ge|in|not-in|between|not-between)::(.+)$", value)
                 and self.schema_object.concurrency_property
             ):
                 raise ApplicationException(
@@ -665,9 +629,7 @@ class SQLSchemaQueryHandler(SQLQueryHandler):
             self.search_placeholders.update(holders)
         return f" WHERE {' AND '.join(conditions)}" if conditions else ""
 
-    def filter_and_prefix_keys(
-        self, regex_list: List[str], properties: dict, prefix: Optional[str] = None
-    ) -> dict:
+    def filter_and_prefix_keys(self, regex_list: List[str], properties: dict, prefix: Optional[str] = None) -> dict:
         """
         Accepts a prefix string, list of regular expressions, and a dictionary.
         Returns a new dictionary containing items whose keys match any of the

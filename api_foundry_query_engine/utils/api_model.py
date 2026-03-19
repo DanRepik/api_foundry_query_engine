@@ -207,9 +207,7 @@ class SchemaObjectAssociation:
             raise ValueError(f"Primary key not defined for schema '{self.schema_name}'")
         column_name = getattr(child_schema.primary_key, "column_name", None)
         if column_name is None:
-            raise ValueError(
-                f"Primary key property does not have 'column_name' for schema '{self.schema_name}'"
-            )
+            raise ValueError(f"Primary key property does not have 'column_name' for schema '{self.schema_name}'")
         return column_name
 
     @property
@@ -220,14 +218,10 @@ class SchemaObjectAssociation:
         if not parent_schema_obj:
             raise ValueError(f"SchemaObject '{self.parent_schema}' not found")
         if not parent_schema_obj.primary_key:
-            raise ValueError(
-                f"Primary key not defined for schema '{self.parent_schema}'"
-            )
+            raise ValueError(f"Primary key not defined for schema '{self.parent_schema}'")
         column_name = getattr(parent_schema_obj.primary_key, "column_name", None)
         if column_name is None:
-            raise ValueError(
-                f"Primary key property does not have 'column_name' for schema '{self.parent_schema}'"
-            )
+            raise ValueError(f"Primary key property does not have 'column_name' for schema '{self.parent_schema}'")
         return column_name
 
     def __repr__(self):
@@ -255,23 +249,16 @@ class SchemaObject:
         self.database: str = str(data.get("database"))
         self.schema: Optional[str] = data.get("schema")
         self.table_name: str = str(data.get("table_name"))
-        self.qualified_name: str = (
-            f"{self.schema}.{self.table_name}" if self.schema else self.table_name
-        )
+        self.qualified_name: str = f"{self.schema}.{self.table_name}" if self.schema else self.table_name
         self.properties: Dict[str, SchemaObjectProperty] = {
-            name: SchemaObjectProperty(prop_data)
-            for name, prop_data in data.get("properties", {}).items()
+            name: SchemaObjectProperty(prop_data) for name, prop_data in data.get("properties", {}).items()
         }
         self.relations = {
-            name: SchemaObjectAssociation(
-                self.api_name if self.api_name is not None else "", assoc_data
-            )
+            name: SchemaObjectAssociation(self.api_name if self.api_name is not None else "", assoc_data)
             for name, assoc_data in data.get("relations", {}).items()
         }
         self.concurrency_property = (
-            self.properties[str(data.get("concurrency_property"))]
-            if data.get("concurrency_property")
-            else None
+            self.properties[str(data.get("concurrency_property"))] if data.get("concurrency_property") else None
         )
         self._primary_key: str = str(data.get("primary_key"))
         self.permissions = data.get("permissions")
@@ -293,8 +280,7 @@ class SchemaObject:
             name: prop
             for name, prop in self.properties.items()
             if prop.is_soft_delete_field()
-            and prop.get_soft_delete_strategy()
-            in ["null_check", "boolean_flag", "exclude_values"]
+            and prop.get_soft_delete_strategy() in ["null_check", "boolean_flag", "exclude_values"]
         }
 
     def get_soft_delete_audit_properties(
@@ -304,8 +290,7 @@ class SchemaObject:
         return {
             name: prop
             for name, prop in self.properties.items()
-            if prop.is_soft_delete_field()
-            and prop.get_soft_delete_strategy() == "audit_field"
+            if prop.is_soft_delete_field() and prop.get_soft_delete_strategy() == "audit_field"
         }
 
     def get_soft_delete_strategies(self) -> List[str]:
@@ -326,12 +311,10 @@ class PathOperation:
         self.sql: str = data["sql"]
         self.database: str = data["database"]
         self.inputs: Dict[str, SchemaObjectProperty] = {
-            name: SchemaObjectProperty(input_data)
-            for name, input_data in data.get("inputs", {}).items()
+            name: SchemaObjectProperty(input_data) for name, input_data in data.get("inputs", {}).items()
         }
         self.outputs: Dict[str, SchemaObjectProperty] = {
-            name: SchemaObjectProperty(output_data)
-            for name, output_data in data.get("outputs", {}).items()
+            name: SchemaObjectProperty(output_data) for name, output_data in data.get("outputs", {}).items()
         }
         self.permissions = data.get("security")
 
@@ -345,12 +328,10 @@ class APIModel:
     def __init__(self, config: Dict[str, Any]):
         log.info("building api_model")
         self.schema_objects = {
-            name: SchemaObject(schema_data)
-            for name, schema_data in config.get("schema_objects", {}).items()
+            name: SchemaObject(schema_data) for name, schema_data in config.get("schema_objects", {}).items()
         }
         self.path_operations = {
-            name: PathOperation(path_data)
-            for name, path_data in config.get("path_operations", {}).items()
+            name: PathOperation(path_data) for name, path_data in config.get("path_operations", {}).items()
         }
 
     def get_path_operation(self, path: str, method: str) -> Optional[PathOperation]:
@@ -373,8 +354,6 @@ def set_api_model(engine_config: Mapping[str, str]):
             api_model = APIModel(yaml.safe_load(engine_config["API_SPEC"]))
         else:
             log.info("Loading API model from file")
-            with open(
-                os.environ.get("API_SPEC", "/var/task/api_spec.yaml"), "r"
-            ) as file:
+            with open(os.environ.get("API_SPEC", "/var/task/api_spec.yaml"), "r") as file:
                 api_model = APIModel(yaml.safe_load(file))
         log.info("Loaded API model: %s", api_model)

@@ -420,10 +420,9 @@ def _extract_entity_from_path(event: Dict[str, Any]) -> Optional[str]:
     if not literal_parts:
         return None
 
-    if len(literal_parts) == 1:
-        return literal_parts[0]
-
-    return "_".join(literal_parts)
+    # For API paths with prefixes (e.g. "/chinook-api/album"),
+    # the entity is the most specific trailing literal segment.
+    return literal_parts[-1]
 
 
 def _scope_matches(user_scopes: list, required_scope: str, operation: str, entity: str) -> bool:

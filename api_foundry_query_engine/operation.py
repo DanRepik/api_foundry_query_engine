@@ -40,6 +40,7 @@ class Operation:
         store_params: Optional[Dict[str, Any]] = None,
         metadata_params: Optional[Dict[str, Any]] = None,
         claims: Optional[Dict[str, Any]] = None,
+        roles: Optional[List[str]] = None,
     ):
         """
         Initializes the Operation instance.
@@ -76,6 +77,8 @@ class Operation:
 
         # Roles defining the context in which the operation is allowed.
         self.claims = claims or {}
+        if roles is not None and "roles" not in self.claims:
+            self.claims["roles"] = roles
 
         # Log the operation for debugging and audit purposes
         logger.info(
