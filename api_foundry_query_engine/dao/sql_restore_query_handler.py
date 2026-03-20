@@ -89,16 +89,15 @@ class SQLRestoreSchemaQueryHandler(SQLSchemaQueryHandler):
 
         # Process audit fields for restore action
         audit_props = self.schema_object.get_soft_delete_audit_properties()
-        claims = self.operation.claims or {}
-
         for _, prop in audit_props.items():
             config = prop.get_soft_delete_config()
             action = config.get("action", "")
 
-            if action == "restore" and "sub" in claims:
+            claim_sub = self.extract_injected_value("claim:sub")
+            if action == "restore" and claim_sub is not None:
                 placeholder_key = f"audit_{prop.api_name}"
                 columns.append(f"{prop.column_name} = %({placeholder_key})s")
-                self.store_placeholders[placeholder_key] = claims["sub"]
+                self.store_placeholders[placeholder_key] = claim_sub
             elif action == "restore_timestamp":
                 columns.append(f"{prop.column_name} = CURRENT_TIMESTAMP")
 

@@ -634,6 +634,63 @@ class TestSQLHandler:
             == "SELECT genre_id, name FROM genre WHERE genre_id IN ( SELECT t.genre_id FROM track AS t INNER JOIN genre AS g ON t.genre_id = g.genre_id WHERE g.genre_id = %(g_genre_id)s )"
         )
 
+    @pytest.mark.unit
+    def test_row_level_read_filter_uses_nested_authorizer_claims(self):
+        schema = SchemaObject(
+            {
+                "api_name": "journal_entry",
+                "database": "policy_corpus",
+                "table_name": "journal_entry",
+                "primary_key": "journal_entry_id",
+                "properties": {
+                    "journal_entry_id": {
+                        "api_name": "journal_entry_id",
+                        "api_type": "string",
+                        "column_name": "journal_entry_id",
+                        "column_type": "string",
+                    },
+                    "user_id": {
+                        "api_name": "user_id",
+                        "api_type": "string",
+                        "column_name": "user_id",
+                        "column_type": "string",
+                    },
+                    "body": {
+                        "api_name": "body",
+                        "api_type": "string",
+                        "column_name": "body",
+                        "column_type": "string",
+                    },
+                },
+                "permissions": {
+                    "default": {
+                        "read": {
+                            "public": {
+                                "properties": ".*",
+                                "where": "user_id = ${claims.sub}",
+                            }
+                        }
+                    }
+                },
+            }
+        )
+
+        operation = Operation(
+            entity="journal_entry",
+            action="read",
+            query_params={"journal_entry_id": "entry-1"},
+            claims={"claims": {"sub": "public-user-id-005"}},
+            roles=["public"],
+        )
+
+        sql_handler = SQLSelectSchemaQueryHandler(operation, schema, "postgres")
+
+        assert (
+            sql_handler.sql
+            == "SELECT j.journal_entry_id, j.user_id, j.body FROM journal_entry AS j WHERE j.journal_entry_id = %(j_journal_entry_id)s AND ((user_id = 'public-user-id-005'))"
+        )
+        assert sql_handler.placeholders == {"j_journal_entry_id": "entry-1"}
+
 
 @pytest.mark.unit
 class TestTypeConversions:

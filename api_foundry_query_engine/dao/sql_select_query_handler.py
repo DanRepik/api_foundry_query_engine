@@ -69,8 +69,7 @@ class SQLSelectSchemaQueryHandler(SQLSchemaQueryHandler):
 
         def _replace(m: Match[str]) -> str:
             key = m.group(1)
-            claims = self.operation.claims or {}
-            return _quote(claims.get(key))
+            return _quote(self.extract_injected_value(f"claim:{key}"))
 
         return re.sub(r"\$\{claims\.([A-Za-z0-9_]+)\}", _replace, expr)
 

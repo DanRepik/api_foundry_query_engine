@@ -7,6 +7,7 @@ from api_foundry_query_engine.dao.sql_update_query_handler import (
 )
 from api_foundry_query_engine.utils.app_exception import ApplicationException
 from api_foundry_query_engine.operation import Operation
+from api_foundry_query_engine.utils.api_model import SchemaObject
 from api_foundry_query_engine.utils.logger import logger
 
 # from test_fixtures import load_model  # noqa F401
@@ -192,3 +193,66 @@ class TestUpdateSQLHandler:
                 err.message
                 == "Missing required concurrency management property.  schema_object: invoice, property: last_updated"
             )
+
+    def test_update_row_filter_uses_nested_authorizer_claims(self):
+        schema = SchemaObject(
+            {
+                "api_name": "comment",
+                "database": "policy_corpus",
+                "table_name": "comment",
+                "primary_key": "comment_id",
+                "properties": {
+                    "comment_id": {
+                        "api_name": "comment_id",
+                        "api_type": "string",
+                        "column_name": "comment_id",
+                        "column_type": "string",
+                    },
+                    "user_id": {
+                        "api_name": "user_id",
+                        "api_type": "string",
+                        "column_name": "user_id",
+                        "column_type": "string",
+                    },
+                    "body": {
+                        "api_name": "body",
+                        "api_type": "string",
+                        "column_name": "body",
+                        "column_type": "string",
+                    },
+                },
+                "permissions": {
+                    "default": {
+                        "read": {"public": ".*"},
+                        "write": {
+                            "public": {
+                                "properties": "^(body)$",
+                                "where": "user_id = ${claims.sub}",
+                            }
+                        },
+                    }
+                },
+            }
+        )
+
+        sql_handler = SQLUpdateSchemaQueryHandler(
+            Operation(
+                entity="comment",
+                action="update",
+                query_params={"comment_id": "comment-1"},
+                store_params={"body": "Updated body"},
+                claims={"claims": {"sub": "public-user-id-005"}},
+                roles=["public"],
+            ),
+            schema,
+            "postgres",
+        )
+
+        assert (
+            sql_handler.sql
+            == "UPDATE comment SET body = %(body)s WHERE comment_id = %(comment_id)s AND ((user_id = 'public-user-id-005')) RETURNING comment_id, user_id, body"
+        )
+        assert sql_handler.placeholders == {
+            "comment_id": "comment-1",
+            "body": "Updated body",
+        }
