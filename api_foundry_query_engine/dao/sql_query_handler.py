@@ -413,7 +413,20 @@ class SQLQueryHandler:
         """
         if inject_value_source.startswith("claim:"):
             claim_key = inject_value_source[6:]
-            return self.operation.claims.get(claim_key)
+            if claim_key in self.operation.claims:
+                return self.operation.claims.get(claim_key)
+
+            claims_payload = self.operation.claims.get("claims")
+            if isinstance(claims_payload, dict) and claim_key in claims_payload:
+                return claims_payload.get(claim_key)
+
+            jwt_payload = self.operation.claims.get("jwt")
+            if isinstance(jwt_payload, dict):
+                jwt_claims = jwt_payload.get("claims")
+                if isinstance(jwt_claims, dict):
+                    return jwt_claims.get(claim_key)
+
+            return None
         elif inject_value_source == "timestamp":
             return datetime.utcnow().isoformat()
         elif inject_value_source == "date":

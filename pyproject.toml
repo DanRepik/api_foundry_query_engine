@@ -26,7 +26,8 @@ dev = [
     "black>=23.0.0",
     "isort>=5.12.0",
     "fixture_foundry>=0.1.0",
-    "simple-oauth-server"
+    "simple-oauth-server",
+    "pulumi>=3.224.0",
 ]
 
 [project.urls]
@@ -40,14 +41,7 @@ include = ["api_foundry_query_engine"]
 include = ["api_foundry_query_engine"]
 
 [tool.hatch.envs.dev]
-dependencies = [
-    "pytest>=7.0",
-    "pytest-cov>=4.0.0",
-    "black>=23.0.0",
-    "isort>=5.12.0",
-    "fixture_foundry>=0.1.0",
-    "simple-oauth-server",
-    ]
+features = ["dev"]
 
 [project.scripts]
 

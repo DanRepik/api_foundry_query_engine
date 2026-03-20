@@ -51,6 +51,42 @@ class TestValueExtraction:
         assert handler.extract_injected_value("claim:tenant") == "acme"
         assert handler.extract_injected_value("claim:missing") is None
 
+    def test_extract_claim_value_from_authorizer_payload(self):
+        """Test extracting value from API Gateway authorizer claims payload."""
+        operation = Operation(
+            entity="test",
+            action="create",
+            claims={
+                "roles": ["public"],
+                "claims": {"sub": "user123", "tenant": "acme"},
+                "jwt": {"claims": {"sub": "user123", "tenant": "acme"}},
+                "principalId": "user123",
+            },
+        )
+        schema_object = SchemaObject(
+            {
+                "api_name": "test",
+                "database": "test_db",
+                "table_name": "test_table",
+                "primary_key": "id",
+                "properties": {
+                    "id": {
+                        "api_name": "id",
+                        "column_name": "id",
+                        "api_type": "integer",
+                        "column_type": "integer",
+                        "key_type": "auto",
+                    }
+                },
+            }
+        )
+
+        handler = SQLInsertSchemaQueryHandler(operation, schema_object, "postgres")
+
+        assert handler.extract_injected_value("claim:sub") == "user123"
+        assert handler.extract_injected_value("claim:tenant") == "acme"
+        assert handler.extract_injected_value("claim:missing") is None
+
     def test_extract_timestamp(self):
         """Test extracting current timestamp."""
         operation = Operation(entity="test", action="create")
