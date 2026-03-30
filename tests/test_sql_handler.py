@@ -1109,6 +1109,31 @@ class TestTypeConversions:
         assert result == 3.14159
         assert isinstance(result, float)
 
+    def test_convert_to_api_value_structured_types(self):
+        """Test array/object API types preserve structured values."""
+        array_property = SchemaObjectProperty(
+            {
+                "api_name": "test_array",
+                "column_name": "test_array",
+                "api_type": "array",
+                "column_type": "jsonb",
+            }
+        )
+        object_property = SchemaObjectProperty(
+            {
+                "api_name": "test_object",
+                "column_name": "test_object",
+                "api_type": "object",
+                "column_type": "jsonb",
+            }
+        )
+
+        array_value = [{"id": 1}, {"id": 2}]
+        object_value = {"page": {"number": 1}, "items": ["a", "b"]}
+
+        assert array_property.convert_to_api_value(array_value) is array_value
+        assert object_property.convert_to_api_value(object_value) is object_value
+
     def test_convert_to_api_value_boolean_types(self):
         """Test boolean type conversions from database to API."""
         bool_property = SchemaObjectProperty(

@@ -125,6 +125,11 @@ class SchemaObjectProperty:
 
         api_type = self.api_type if self.api_type is not None else "string"
 
+        # Preserve structured values so JSON aggregates are serialized as native
+        # arrays/objects instead of stringified Python representations.
+        if api_type in ["array", "object"]:
+            return value
+
         # Handle string types (including UUID which is represented as string in API)
         if api_type in ["string", "uuid"]:
             return str(value) if value is not None else None
