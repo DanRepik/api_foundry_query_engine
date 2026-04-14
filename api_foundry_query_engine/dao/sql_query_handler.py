@@ -97,12 +97,15 @@ RELATIONAL_TYPES = {
     "lt": "<",
     "le": "<=",
     "eq": "=",
+    "ne": "<>",
     "ge": ">=",
     "gt": ">",
     "in": "in",
     "not-in": "not-in",
     "between": "between",
     "not-between": "not-between",
+    "like": "like",
+    "not-like": "not-like",
 }
 
 
@@ -355,6 +358,8 @@ class SQLQueryHandler:
                 self.placeholder(property, f"{placeholder_name}_{index}") for index, _ in enumerate(value_set)
             ]
             sql = f"{column} {'NOT ' if operand == 'not-in' else ''}IN ({', '.join(assignments)})"  # noqa E501
+        elif operand in ["like", "not-like"]:
+            sql = f"{column} {'NOT ' if operand == 'not-like' else ''}LIKE {self.placeholder(property, str(placeholder_name))}"
         else:
             sql = f"{column} {operand} {self.placeholder(property, str(placeholder_name))}"
         return sql
@@ -385,10 +390,15 @@ class SQLQueryHandler:
             for index, item in enumerate(value_set):
                 item_name = f"{placeholder_name}_{index}"
                 placeholders[item_name] = property.convert_to_db_value(item)
+        elif operand in ["like", "not-like"]:
+            placeholders = {placeholder_name: self._normalize_like_pattern(value_str)}
         else:
             placeholders = {placeholder_name: property.convert_to_db_value(value_str)}
 
         return placeholders
+
+    def _normalize_like_pattern(self, value: str) -> str:
+        return value.replace("*", "%").replace("?", "_")
 
     def search_value_assignment(
         self, property: SchemaObjectProperty, value, prefix: Optional[str] = None
@@ -508,12 +518,69 @@ class SQLSchemaQueryHandler(SQLQueryHandler):
         log.info("selection_result")
         if not hasattr(self, "__selection_results"):
             log.info("prefix_map: %s", self.prefix_map)
-            filters = self.operation.metadata_params.get("_properties", ".*").split()
+            filters = self.tokenize_selector_filters(self.operation.metadata_params.get("_properties", ".*"))
             allowed_properties = self.check_permissions(
                 "read", self.schema_object.permissions, self.schema_object.properties
             )
             self.__selection_results = self.filter_and_prefix_keys(filters, allowed_properties)
         return self.__selection_results
+
+    @staticmethod
+    def tokenize_selector_filters(filter_str: str) -> List[str]:
+        """Split selector strings on commas or whitespace outside regex groups.
+
+        This preserves commas used inside regex syntax such as `{1,3}` or `[a,b]`
+        while allowing callers to pass selectors as either space-delimited,
+        comma-delimited, or mixed.
+        """
+        if not filter_str:
+            return []
+
+        filters: List[str] = []
+        current: List[str] = []
+        bracket_depth = 0
+        brace_depth = 0
+        paren_depth = 0
+        escaped = False
+
+        for char in filter_str:
+            if escaped:
+                current.append(char)
+                escaped = False
+                continue
+
+            if char == "\\":
+                current.append(char)
+                escaped = True
+                continue
+
+            if char == "[":
+                bracket_depth += 1
+            elif char == "]" and bracket_depth > 0:
+                bracket_depth -= 1
+            elif char == "{":
+                brace_depth += 1
+            elif char == "}" and brace_depth > 0:
+                brace_depth -= 1
+            elif char == "(":
+                paren_depth += 1
+            elif char == ")" and paren_depth > 0:
+                paren_depth -= 1
+
+            if char in {",", " ", "\t", "\n", "\r"} and not (bracket_depth or brace_depth or paren_depth):
+                token = "".join(current).strip()
+                if token:
+                    filters.append(token)
+                current = []
+                continue
+
+            current.append(char)
+
+        token = "".join(current).strip()
+        if token:
+            filters.append(token)
+
+        return filters
 
     def _has_soft_delete_conflicts(self) -> Dict[str, bool]:
         """
@@ -626,7 +693,7 @@ class SQLSchemaQueryHandler(SQLQueryHandler):
             if (
                 self.operation.action != "read"
                 and isinstance(value, str)
-                and re.match(r"^(lt|le|eq|ne|gt|ge|in|not-in|between|not-between)::(.+)$", value)
+                and re.match(r"^(lt|le|eq|ne|gt|ge|in|not-in|between|not-between|like|not-like)::(.+)$", value)
                 and self.schema_object.concurrency_property
             ):
                 raise ApplicationException(

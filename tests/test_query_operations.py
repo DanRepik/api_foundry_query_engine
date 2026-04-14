@@ -169,6 +169,36 @@ class TestQueryOperations:
 
         assert total_count == in_count + not_in_count
 
+    def test_select_like_string(self, chinook_env):  # noqa F811
+        result = TransactionalService(chinook_env).execute(
+            Operation(
+                entity="track",
+                action="read",
+                query_params={"name": "like::Dark*"},
+            )
+        )
+        like_count = len(result)
+        log.info(f"like_count: {like_count}")
+
+        result = TransactionalService(chinook_env).execute(
+            Operation(
+                entity="track",
+                action="read",
+                query_params={"name": "not-like::Dark*"},
+            )
+        )
+        not_like_count = len(result)
+        log.info(f"not_like_count: {not_like_count}")
+
+        result = TransactionalService(chinook_env).execute(
+            Operation(entity="track", action="read")
+        )
+        total_count = len(result)
+        log.info(f"total_count: {total_count}")
+
+        assert like_count > 0
+        assert total_count == like_count + not_like_count
+
     def test_select_ge_lt_timestamp(self, chinook_env):  # noqa F811
         result = TransactionalService(chinook_env).execute(
             Operation(

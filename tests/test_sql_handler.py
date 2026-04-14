@@ -237,6 +237,55 @@ class TestSQLHandler:
         assert placeholders["i_total_1"] == 1250.0
         assert placeholders["i_total_2"] == 1300.0
 
+    @pytest.mark.unit
+    def test_search_value_assignment_like(self):
+        sql_handler = SQLSelectSchemaQueryHandler(
+            Operation(entity="genre", action="read"),
+            genre_schema_with_timestamp(),
+            "postgres",
+        )
+        name_property = genre_schema_with_timestamp().properties["name"]
+
+        (sql, placeholders) = sql_handler.search_value_assignment(
+            name_property, "like::Rock*", "g"
+        )
+        assert sql == "g.name LIKE %(g_name)s"
+        assert placeholders == {"g_name": "Rock%"}
+
+        (sql, placeholders) = sql_handler.search_value_assignment(
+            name_property, "not-like::Rock?", "g"
+        )
+        assert sql == "g.name NOT LIKE %(g_name)s"
+        assert placeholders == {"g_name": "Rock_"}
+
+    @pytest.mark.unit
+    def test_get_regex_map_accepts_space_and_comma_delimiters(self):
+        sql_handler = SQLSelectSchemaQueryHandler(
+            Operation(entity="genre", action="read"),
+            genre_schema_with_timestamp(),
+            "postgres",
+        )
+
+        assert sql_handler.get_regex_map("genre_id name") == {"genre": ["genre_id", "name"]}
+        assert sql_handler.get_regex_map("genre_id,name") == {"genre": ["genre_id", "name"]}
+        assert sql_handler.get_regex_map("genre_id, name") == {"genre": ["genre_id", "name"]}
+        assert sql_handler.get_regex_map("genre_id, related:.*") == {
+            "genre": ["genre_id"],
+            "related": [".*"],
+        }
+
+    @pytest.mark.unit
+    def test_get_regex_map_preserves_commas_inside_regex(self):
+        sql_handler = SQLSelectSchemaQueryHandler(
+            Operation(entity="genre", action="read"),
+            genre_schema_with_timestamp(),
+            "postgres",
+        )
+
+        assert sql_handler.get_regex_map(r"name{1,3},genre_id") == {
+            "genre": [r"name{1,3}", "genre_id"]
+        }
+
     @pytest.mark.integration
     def test_search_value_assignment_column_rename(self, chinook_env):
         schema_object = get_schema_object("invoice")

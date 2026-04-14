@@ -303,7 +303,7 @@ class SQLSelectSchemaQueryHandler(SQLSchemaQueryHandler):
     def get_regex_map(self, filter_str: str) -> dict:
         result = {}
 
-        for flt in filter_str.split():
+        for flt in self.tokenize_selector_filters(filter_str):
             parts = flt.split(":")
             entity = parts[0] if len(parts) > 1 else self.schema_object.api_name
             expression = parts[-1]

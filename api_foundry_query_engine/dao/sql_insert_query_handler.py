@@ -59,7 +59,7 @@ class SQLInsertSchemaQueryHandler(SQLSchemaQueryHandler):
             )
             # Combine both (union of read and write)
             combined = {**read_props, **write_props}
-            filters = self.operation.metadata_params.get("_properties", ".*").split()
+            filters = self.tokenize_selector_filters(self.operation.metadata_params.get("_properties", ".*"))
             self._insert_selection_results = self.filter_and_prefix_keys(filters, combined)
         return self._insert_selection_results
 

@@ -140,6 +140,9 @@ operation = Operation(
 | `not-in::val1,val2` | `NOT IN (val1,val2)` | `status=not-in::draft,deleted` |
 | `between::val1,val2` | `BETWEEN val1 AND val2` | `price=between::10,50` |
 | `like::pattern` | `LIKE pattern` | `title=like::Dark*` |
+| `not-like::pattern` | `NOT LIKE pattern` | `title=not-like::Dark*` |
+
+For `like` and `not-like`, `*` is translated to SQL `%` and `?` is translated to SQL `_`.
 
 **Store Parameters** - Data to create or update (POST/PUT only):
 
@@ -550,10 +553,12 @@ Customize query behavior and response format:
 
 #### `__properties` - Field Selection
 
-Restrict returned fields using regex patterns:
+Restrict returned fields using regex patterns. Selectors may be separated by whitespace, commas, or a mix of both:
 
 ```
 GET /invoice?__properties=invoice_id total customer:.*
+
+GET /invoice?__properties=invoice_id,total,customer:.*
 ```
 
 Returns only `invoice_id`, `total`, and all customer fields.
