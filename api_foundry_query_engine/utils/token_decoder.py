@@ -20,6 +20,13 @@ __all__ = ["token_decoder"]
 
 log = logging.getLogger(__name__)
 
+METHOD_TO_ACTION = {
+    "GET": "read",
+    "POST": "create",
+    "PUT": "update",
+    "DELETE": "delete",
+}
+
 
 def _log_jwt_configuration():
     """Log current JWT configuration for debugging."""
@@ -112,6 +119,87 @@ class LambdaTokenValidator:
         except Exception as e:
             log.error("Lambda authorizer invocation failed: %s", e)
             raise ValueError(f"Token validation failed: {str(e)}")
+
+
+def _normalize_permission_action(action: str) -> str:
+    return "write" if action in ("create", "update") else action
+
+
+def _extract_event_entity_and_action(event: Dict[str, Any]) -> tuple[Optional[str], str]:
+    resource = event.get("resource") or event.get("path") or ""
+    parts = [p for p in str(resource).split("/") if p]
+    api_prefixes = {"api", "v1", "v2", "v3"}
+    literal_parts = [
+        p
+        for p in parts
+        if p not in api_prefixes and not (p.startswith("{") and p.endswith("}"))
+    ]
+    entity = "_".join(literal_parts) if literal_parts else None
+    method = str(event.get("httpMethod", "")).upper()
+    action = METHOD_TO_ACTION.get(method, "read")
+    return entity, action
+
+
+def _normalize_permissions(permissions: Optional[dict]) -> dict:
+    if not permissions or not isinstance(permissions, dict):
+        return {}
+
+    if "default" in permissions:
+        return permissions
+
+    normalized = {"default": {"read": {}, "write": {}, "delete": {}}}
+    for role, actions in permissions.items():
+        if not isinstance(actions, dict):
+            continue
+        for action, rule in actions.items():
+            normalized_action = _normalize_permission_action(action)
+            if normalized_action in normalized["default"]:
+                normalized["default"][normalized_action][role] = rule
+    return normalized
+
+
+def _get_route_permissions(event: Dict[str, Any]) -> dict:
+    from api_foundry_query_engine.utils import api_model as api_model_module
+    from api_foundry_query_engine.utils.api_model import (
+        get_path_operation,
+        get_schema_object,
+        set_api_model,
+    )
+
+    if api_model_module.api_model is None:
+        if not os.getenv("API_SPEC"):
+            return {}
+        try:
+            set_api_model(os.environ)
+        except Exception as exc:
+            log.warning("Failed to load API model for anonymous-route check: %s", exc)
+            return {}
+
+    entity, action = _extract_event_entity_and_action(event)
+    if not entity:
+        return {}
+
+    path_operation = get_path_operation(entity, action)
+    if path_operation:
+        return path_operation.permissions or {}
+
+    schema_object = get_schema_object(entity)
+    if schema_object:
+        return schema_object.permissions or {}
+
+    return {}
+
+
+def _route_explicitly_allows_role(event: Dict[str, Any], role: Optional[str]) -> bool:
+    if not role:
+        return False
+
+    _, action = _extract_event_entity_and_action(event)
+    permissions = _normalize_permissions(_get_route_permissions(event))
+    action_permissions = permissions.get("default", {}).get(
+        _normalize_permission_action(action), {}
+    )
+    return role in action_permissions
 
 
 def token_decoder(
@@ -223,15 +311,46 @@ def token_decoder(
             log.debug("config_anonymous_role: %s", config_anonymous_role)
             log.debug("config_lambda_arn: %s", config_lambda_arn)
 
+            # Some API Gateway routes are intentionally public but still receive
+            # browser Authorization headers from the SPA. In Lambda proxy mode
+            # those public routes do not have requestContext.authorizer populated,
+            # and invoking a Lambda TOKEN validator from a VPC-backed API Lambda
+            # can hang until the API timeout. When anonymous access is explicitly
+            # enabled and claims checks are disabled, treat the request as public
+            # unless API Gateway already supplied verified claims above.
+            if (
+                config_anonymous_role
+                and os.getenv("SKIP_CLAIMS_CHECK", "").lower() == "true"
+                and _route_explicitly_allows_role(event, config_anonymous_role)
+            ):
+                log.debug(
+                    "SKIP_CLAIMS_CHECK enabled; using anonymous role without inline token validation"
+                )
+                if "requestContext" not in event:
+                    event["requestContext"] = {}
+                event["requestContext"]["authorizer"] = {
+                    "roles": [config_anonymous_role]
+                }
+                return handler(event, context)
+
             # Skip all validation if no method configured
             if not config_lambda_arn and not config_jwks_url:
                 log.debug("No validation method configured")
-                if config_anonymous_role:
+                if _route_explicitly_allows_role(event, config_anonymous_role):
                     log.debug("Using anonymous role: %s", config_anonymous_role)
                     if "requestContext" not in event:
                         event["requestContext"] = {}
                     event["requestContext"]["authorizer"] = {
                         "roles": [config_anonymous_role]
+                    }
+                elif config_anonymous_role:
+                    log.error(
+                        "Anonymous role configured but route does not explicitly allow it"
+                    )
+                    return {
+                        "statusCode": 401,
+                        "headers": {"Content-Type": "application/json"},
+                        "body": json.dumps({"error": "Unauthorized"}),
                     }
                 return handler(event, context)
 
@@ -315,7 +434,7 @@ def token_decoder(
 
                 # Fall back to anonymous if configured
                 if not decoded_token:
-                    if wrapper._anonymous_role:
+                    if _route_explicitly_allows_role(event, wrapper._anonymous_role):
                         log.debug(
                             "Using anonymous role: %s",
                             wrapper._anonymous_role,

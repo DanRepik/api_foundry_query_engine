@@ -32,12 +32,17 @@ class PostgresCursor(Cursor):
         try:
             # Execute the SQL statement with parameters
             self.__cursor.execute(sql, params)
+            selected_columns = set(selection_results)
+            column_names = [desc[0] for desc in (self.__cursor.description or ())]
             result = []
             for record in self.__cursor:
-                # Convert record tuple to dictionary using selection_results
-                result.append(
-                    {col: value for col, value in zip(selection_results, record)}
-                )
+                # Use cursor metadata so SQL aliases define the output mapping.
+                row = {
+                    col: value
+                    for col, value in zip(column_names, record)
+                    if col in selected_columns
+                }
+                result.append(row)
 
             return result
         except IntegrityError as err:
