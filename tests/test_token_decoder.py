@@ -157,3 +157,50 @@ def test_token_decoder_rejects_non_public_routes_without_valid_auth(monkeypatch)
     )
 
     assert result["statusCode"] == 401
+
+
+@pytest.mark.unit
+def test_token_decoder_accepts_generated_permissions_key_for_path_operations(monkeypatch):
+    api_model_module.api_model = None
+    monkeypatch.setenv(
+        "API_SPEC",
+        """
+path_operations:
+  public_read:
+    entity: public
+    action: read
+    sql: SELECT 1
+    database: test
+    inputs: {}
+    outputs: {}
+    permissions:
+      default:
+        read:
+          public: ".*"
+schema_objects: {}
+""".strip(),
+    )
+    monkeypatch.setenv("ANONYMOUS_ROLE", "public")
+    monkeypatch.delenv("TOKEN_VALIDATOR_LAMBDA_ARN", raising=False)
+    monkeypatch.delenv("JWKS_HOST", raising=False)
+    monkeypatch.delenv("JWT_ISSUER", raising=False)
+    monkeypatch.delenv("JWT_ALLOWED_AUDIENCES", raising=False)
+
+    seen = {}
+
+    @token_decoder_module.token_decoder()
+    def handler(event, context):
+        seen["event"] = event
+        return {"statusCode": 200}
+
+    result = handler(
+        {
+            "resource": "/api/public",
+            "httpMethod": "GET",
+            "headers": {},
+        },
+        None,
+    )
+
+    assert result == {"statusCode": 200}
+    assert seen["event"]["requestContext"]["authorizer"] == {"roles": ["public"]}

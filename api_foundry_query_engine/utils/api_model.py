@@ -321,7 +321,7 @@ class PathOperation:
         self.outputs: Dict[str, SchemaObjectProperty] = {
             name: SchemaObjectProperty(output_data) for name, output_data in data.get("outputs", {}).items()
         }
-        self.permissions = data.get("security")
+        self.permissions = data.get("permissions") or data.get("security")
 
     def __repr__(self):
         return f"PathOperation(entity={self.entity}, action={self.action})"
