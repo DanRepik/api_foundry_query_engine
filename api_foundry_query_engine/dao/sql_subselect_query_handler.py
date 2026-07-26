@@ -15,9 +15,7 @@ class SQLSubselectSchemaQueryHandler(SQLSelectSchemaQueryHandler):
         relation: SchemaObjectAssociation,
         parent_generator: SQLSchemaQueryHandler,
     ) -> None:
-        super().__init__(
-            operation, relation.child_schema_object, parent_generator.engine
-        )
+        super().__init__(operation, relation.child_schema_object, parent_generator.engine)
         self.relation = relation
         self.parent_generator = parent_generator
 
@@ -32,10 +30,19 @@ class SQLSubselectSchemaQueryHandler(SQLSelectSchemaQueryHandler):
 
             schema_object = self.relation.child_schema_object
 
-            # Filter and prefix keys for the current entity and regular expressions
-            filtered_keys = self.filter_and_prefix_keys(
-                reg_exs, schema_object.properties
+            # Enforce read permissions on the associated entity's
+            # properties the same way the top-level select handler does.
+            # Without this, a property restricted at the top level (e.g.
+            # a field limited to a privileged role) would leak through
+            # when fetched as a nested one-to-many association.
+            allowed_properties = self.check_permissions(
+                "read",
+                schema_object.permissions,
+                schema_object.properties,
             )
+
+            # Filter and prefix keys for the current entity and regular expressions
+            filtered_keys = self.filter_and_prefix_keys(reg_exs, allowed_properties)
 
             # Extend the result map with the filtered keys
             result.update(filtered_keys)
@@ -51,9 +58,7 @@ class SQLSubselectSchemaQueryHandler(SQLSelectSchemaQueryHandler):
         if len(self.select_list_columns) == 1:  # then it only contains the key
             return None
 
-        parent_prefix = self.parent_generator.prefix_map[
-            str(self.parent_generator.schema_object.api_name)
-        ]
+        parent_prefix = self.parent_generator.prefix_map[str(self.parent_generator.schema_object.api_name)]
         sql = (
             f"SELECT {self.select_list} "
             + f"FROM {self.relation.child_schema_object.qualified_name} "
