@@ -11,7 +11,6 @@ The Query Engine is the AWS Lambda runtime that powers API Foundry's REST APIs. 
 - **Operation Model**: `operation.py` - Central data structure with entity, action, query/store params, roles, and claims
 - **Adapters**: Transform data between layers
   - `GatewayAdapter`: API Gateway events ↔ Operations (extracts roles from JWT claims)
-  - `CaseChangeAdapter`: Field name normalization (snake_case ↔ camelCase)
 - **Services**: Business logic pipeline (`Service`, `TransactionalService`)
 - **DAO Layer**: `OperationDAO` routes to specialized SQL handlers by action type
 - **SQL Handlers**: Generate database-specific SQL and parameters
