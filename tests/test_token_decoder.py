@@ -204,3 +204,95 @@ schema_objects: {}
 
     assert result == {"statusCode": 200}
     assert seen["event"]["requestContext"]["authorizer"] == {"roles": ["public"]}
+
+
+@pytest.mark.unit
+def test_token_decoder_accepts_api_spec_file_path_for_public_routes(monkeypatch, tmp_path):
+    api_model_module.api_model = None
+    spec_path = tmp_path / "api_spec.yaml"
+    spec_path.write_text(
+        """
+path_operations:
+  public_read:
+    entity: public
+    action: read
+    sql: SELECT 1
+    database: test
+    inputs: {}
+    outputs: {}
+    permissions:
+      default:
+        read:
+          public: ".*"
+schema_objects: {}
+""".strip()
+    )
+    monkeypatch.setenv("API_SPEC", str(spec_path))
+    monkeypatch.setenv("ANONYMOUS_ROLE", "public")
+    monkeypatch.delenv("TOKEN_VALIDATOR_LAMBDA_ARN", raising=False)
+    monkeypatch.delenv("JWKS_HOST", raising=False)
+    monkeypatch.delenv("JWT_ISSUER", raising=False)
+    monkeypatch.delenv("JWT_ALLOWED_AUDIENCES", raising=False)
+
+    seen = {}
+
+    @token_decoder_module.token_decoder()
+    def handler(event, context):
+        seen["event"] = event
+        return {"statusCode": 200}
+
+    result = handler(
+        {
+            "resource": "/api/public",
+            "httpMethod": "GET",
+            "headers": {},
+        },
+        None,
+    )
+
+    assert result == {"statusCode": 200}
+    assert seen["event"]["requestContext"]["authorizer"] == {"roles": ["public"]}
+
+
+@pytest.mark.unit
+def test_token_decoder_loads_route_permissions_without_api_spec_env(monkeypatch):
+    api_model_module.api_model = None
+    monkeypatch.delenv("API_SPEC", raising=False)
+    monkeypatch.setenv("ANONYMOUS_ROLE", "public")
+    monkeypatch.delenv("TOKEN_VALIDATOR_LAMBDA_ARN", raising=False)
+    monkeypatch.delenv("JWKS_HOST", raising=False)
+    monkeypatch.delenv("JWT_ISSUER", raising=False)
+    monkeypatch.delenv("JWT_ALLOWED_AUDIENCES", raising=False)
+
+    class DummyPathOperation:
+        permissions = {"default": {"read": {"public": ".*"}}}
+
+    calls = {"set_api_model": 0}
+
+    def fake_set_api_model(_engine_config):
+        calls["set_api_model"] += 1
+        api_model_module.api_model = object()
+
+    monkeypatch.setattr(api_model_module, "set_api_model", fake_set_api_model)
+    monkeypatch.setattr(api_model_module, "get_path_operation", lambda entity, action: DummyPathOperation())
+    monkeypatch.setattr(api_model_module, "get_schema_object", lambda entity: None)
+
+    seen = {}
+
+    @token_decoder_module.token_decoder()
+    def handler(event, context):
+        seen["event"] = event
+        return {"statusCode": 200}
+
+    result = handler(
+        {
+            "resource": "/api/public",
+            "httpMethod": "GET",
+            "headers": {},
+        },
+        None,
+    )
+
+    assert calls["set_api_model"] == 1
+    assert result == {"statusCode": 200}
+    assert seen["event"]["requestContext"]["authorizer"] == {"roles": ["public"]}

@@ -355,10 +355,21 @@ class APIModel:
 def set_api_model(engine_config: Mapping[str, str]):
     global api_model
     if api_model is None:
-        if engine_config.get("API_SPEC"):
-            api_model = APIModel(yaml.safe_load(engine_config["API_SPEC"]))
+        api_spec_value = engine_config.get("API_SPEC")
+        if api_spec_value:
+            if isinstance(api_spec_value, str) and os.path.exists(api_spec_value):
+                log.info("Loading API model from API_SPEC file path")
+                with open(api_spec_value, "r") as file:
+                    config = yaml.safe_load(file)
+            else:
+                config = yaml.safe_load(api_spec_value)
+                if isinstance(config, str) and os.path.exists(config):
+                    log.info("Loading API model from API_SPEC file path")
+                    with open(config, "r") as file:
+                        config = yaml.safe_load(file)
         else:
             log.info("Loading API model from file")
             with open(os.environ.get("API_SPEC", "/var/task/api_spec.yaml"), "r") as file:
-                api_model = APIModel(yaml.safe_load(file))
+                config = yaml.safe_load(file)
+        api_model = APIModel(config)
         log.info("Loaded API model: %s", api_model)

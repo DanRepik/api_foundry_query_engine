@@ -33,9 +33,7 @@ def _log_jwt_configuration():
     log.debug("=== JWT Configuration Debug ===")
     log.debug("JWKS_HOST: %s", os.getenv("JWKS_HOST", "NOT_SET"))
     log.debug("JWT_ISSUER: %s", os.getenv("JWT_ISSUER", "NOT_SET"))
-    log.debug(
-        "JWT_ALLOWED_AUDIENCES: %s", os.getenv("JWT_ALLOWED_AUDIENCES", "NOT_SET")
-    )
+    log.debug("JWT_ALLOWED_AUDIENCES: %s", os.getenv("JWT_ALLOWED_AUDIENCES", "NOT_SET"))
     log.debug("ANONYMOUS_ROLE: %s", os.getenv("ANONYMOUS_ROLE", "NOT_SET"))
     log.debug(
         "TOKEN_VALIDATOR_LAMBDA_ARN: %s",
@@ -65,9 +63,7 @@ class LambdaTokenValidator:
             log.error("boto3 not available for Lambda token validation")
             raise ImportError("boto3 is required for Lambda token validation")
 
-    def validate(
-        self, token: str, method_arn: str = "arn:aws:execute-api:*:*:*"
-    ) -> Dict[str, Any]:
+    def validate(self, token: str, method_arn: str = "arn:aws:execute-api:*:*:*") -> Dict[str, Any]:
         """
         Invoke AWS Lambda TOKEN authorizer.
 
@@ -129,11 +125,7 @@ def _extract_event_entity_and_action(event: Dict[str, Any]) -> tuple[Optional[st
     resource = event.get("resource") or event.get("path") or ""
     parts = [p for p in str(resource).split("/") if p]
     api_prefixes = {"api", "v1", "v2", "v3"}
-    literal_parts = [
-        p
-        for p in parts
-        if p not in api_prefixes and not (p.startswith("{") and p.endswith("}"))
-    ]
+    literal_parts = [p for p in parts if p not in api_prefixes and not (p.startswith("{") and p.endswith("}"))]
     entity = "_".join(literal_parts) if literal_parts else None
     method = str(event.get("httpMethod", "")).upper()
     action = METHOD_TO_ACTION.get(method, "read")
@@ -167,8 +159,6 @@ def _get_route_permissions(event: Dict[str, Any]) -> dict:
     )
 
     if api_model_module.api_model is None:
-        if not os.getenv("API_SPEC"):
-            return {}
         try:
             set_api_model(os.environ)
         except Exception as exc:
@@ -196,9 +186,7 @@ def _route_explicitly_allows_role(event: Dict[str, Any], role: Optional[str]) ->
 
     _, action = _extract_event_entity_and_action(event)
     permissions = _normalize_permissions(_get_route_permissions(event))
-    action_permissions = permissions.get("default", {}).get(
-        _normalize_permission_action(action), {}
-    )
+    action_permissions = permissions.get("default", {}).get(_normalize_permission_action(action), {})
     return role in action_permissions
 
 
@@ -262,12 +250,7 @@ def token_decoder(
     config_lambda_arn = lambda_validator_arn or os.getenv("TOKEN_VALIDATOR_LAMBDA_ARN")
 
     # If no config provided, allow for runtime configuration
-    if (
-        not config_anonymous_role
-        and not jwks_url
-        and not os.getenv("JWKS_HOST")
-        and not config_lambda_arn
-    ):
+    if not config_anonymous_role and not jwks_url and not os.getenv("JWKS_HOST") and not config_lambda_arn:
         pass
 
     def decorator(handler: Callable) -> Callable:
@@ -290,13 +273,9 @@ def token_decoder(
                 return handler(event, context)
 
             # Determine configuration sources
-            config_lambda_arn = lambda_validator_arn or os.getenv(
-                "TOKEN_VALIDATOR_LAMBDA_ARN"
-            )
+            config_lambda_arn = lambda_validator_arn or os.getenv("TOKEN_VALIDATOR_LAMBDA_ARN")
             config_jwks_url = (
-                jwks_url or f"{os.getenv('JWKS_HOST')}/.well-known/jwks.json"
-                if os.getenv("JWKS_HOST")
-                else None
+                jwks_url or f"{os.getenv('JWKS_HOST')}/.well-known/jwks.json" if os.getenv("JWKS_HOST") else None
             )
             config_issuer = issuer or os.getenv("JWT_ISSUER")
             config_audience = (
@@ -323,14 +302,10 @@ def token_decoder(
                 and os.getenv("SKIP_CLAIMS_CHECK", "").lower() == "true"
                 and _route_explicitly_allows_role(event, config_anonymous_role)
             ):
-                log.debug(
-                    "SKIP_CLAIMS_CHECK enabled; using anonymous role without inline token validation"
-                )
+                log.debug("SKIP_CLAIMS_CHECK enabled; using anonymous role without inline token validation")
                 if "requestContext" not in event:
                     event["requestContext"] = {}
-                event["requestContext"]["authorizer"] = {
-                    "roles": [config_anonymous_role]
-                }
+                event["requestContext"]["authorizer"] = {"roles": [config_anonymous_role]}
                 return handler(event, context)
 
             # Skip all validation if no method configured
@@ -340,13 +315,9 @@ def token_decoder(
                     log.debug("Using anonymous role: %s", config_anonymous_role)
                     if "requestContext" not in event:
                         event["requestContext"] = {}
-                    event["requestContext"]["authorizer"] = {
-                        "roles": [config_anonymous_role]
-                    }
+                    event["requestContext"]["authorizer"] = {"roles": [config_anonymous_role]}
                 elif config_anonymous_role:
-                    log.error(
-                        "Anonymous role configured but route does not explicitly allow it"
-                    )
+                    log.error("Anonymous role configured but route does not explicitly allow it")
                     return {
                         "statusCode": 401,
                         "headers": {"Content-Type": "application/json"},
@@ -367,9 +338,7 @@ def token_decoder(
                             "Configuring Lambda validator: %s",
                             config_lambda_arn,
                         )
-                        wrapper._lambda_validator = LambdaTokenValidator(
-                            config_lambda_arn
-                        )
+                        wrapper._lambda_validator = LambdaTokenValidator(config_lambda_arn)
                     else:
                         wrapper._lambda_validator = None
 
@@ -382,9 +351,7 @@ def token_decoder(
                         wrapper._jwt_decoder = JWTDecoder(
                             jwks_url=config_jwks_url,
                             issuer=config_issuer,
-                            allowed_audiences=set(config_audience)
-                            if config_audience
-                            else None,
+                            allowed_audiences=set(config_audience) if config_audience else None,
                             algorithms=config_algorithms,
                             anonymous_role=config_anonymous_role,
                         )
@@ -500,9 +467,7 @@ class JWTDecoder:
         if jwks_url:
             self.public_key = self.fetch_public_key_from_jwks(jwks_url)
             if not self.public_key:
-                raise ValueError(
-                    f"Failed to fetch public key from JWKS URL: {jwks_url}"
-                )
+                raise ValueError(f"Failed to fetch public key from JWKS URL: {jwks_url}")
         else:
             self.public_key = None
 
@@ -512,9 +477,7 @@ class JWTDecoder:
             self.algorithms,
         )
 
-    def fetch_public_key_from_jwks(
-        self, jwks_url: str, kid: Optional[str] = None
-    ) -> Optional[str]:
+    def fetch_public_key_from_jwks(self, jwks_url: str, kid: Optional[str] = None) -> Optional[str]:
         """
         Fetch the public key from a JWKS endpoint.
 
@@ -557,9 +520,7 @@ class JWTDecoder:
                     log.warning("Key ID %s not found, using first key", kid)
             if not key:
                 key = keys[0]
-                log.debug(
-                    "Using first available key with kid: %s", key.get("kid", "unknown")
-                )
+                log.debug("Using first available key with kid: %s", key.get("kid", "unknown"))
             # Convert JWK to PEM (requires cryptography)
 
             def b64url_decode(val):
@@ -585,15 +546,11 @@ class JWTDecoder:
             if token:
                 return self.decode_token(token)
             elif self.anonymous_role:
-                log.debug(
-                    "No token found, using anonymous role: %s", self.anonymous_role
-                )
+                log.debug("No token found, using anonymous role: %s", self.anonymous_role)
                 return {"roles": [self.anonymous_role]}
             else:
                 log.error("No token found and no anonymous role configured")
-                raise ValueError(
-                    "Authentication required: no token provided and no anonymous access configured"
-                )
+                raise ValueError("Authentication required: no token provided and no anonymous access configured")
         except ValueError as e:
             if self.anonymous_role and "No authorization header" in str(e):
                 log.debug("Token parsing failed, using anonymous role: %s", str(e))
@@ -620,11 +577,7 @@ class JWTDecoder:
         auth_token_parts = auth_header.split(" ")
         log.debug("Authorization header parts: %d", len(auth_token_parts))
 
-        if (
-            len(auth_token_parts) != 2
-            or auth_token_parts[0].lower() != "bearer"
-            or not auth_token_parts[1]
-        ):
+        if len(auth_token_parts) != 2 or auth_token_parts[0].lower() != "bearer" or not auth_token_parts[1]:
             log.error("Invalid authorization header format")
             raise ValueError("Invalid AuthorizationToken.")
 
@@ -684,9 +637,7 @@ class JWTDecoder:
             log.debug("Token audience claim: %s", token_aud)
 
             # Normalize token audience to a list for comparison
-            token_auds = (
-                [token_aud] if isinstance(token_aud, str) else list(token_aud or [])
-            )
+            token_auds = [token_aud] if isinstance(token_aud, str) else list(token_aud or [])
             token_auds = [str(a).strip() for a in token_auds if str(a).strip()]
             log.debug("Normalized token audiences: %s", token_auds)
 
