@@ -1,3 +1,5 @@
+import re
+from typing import Match
 from api_foundry_query_engine.dao.sql_query_handler import (
     SQLSchemaQueryHandler,
 )
@@ -12,9 +14,7 @@ log = logger(__name__)
 class SQLRestoreSchemaQueryHandler(SQLSchemaQueryHandler):
     """Handler for restoring soft-deleted records."""
 
-    def __init__(
-        self, operation: Operation, schema_object: SchemaObject, engine: str
-    ) -> None:
+    def __init__(self, operation: Operation, schema_object: SchemaObject, engine: str) -> None:
         super().__init__(operation, schema_object, engine)
 
     def check_permission(self) -> bool:
@@ -42,9 +42,7 @@ class SQLRestoreSchemaQueryHandler(SQLSchemaQueryHandler):
 
             # If still not found, check wildcard "*"
             if role_permissions is None:
-                role_permissions = restore_permissions.get(
-                    "*"
-                ) or write_permissions.get("*")
+                role_permissions = restore_permissions.get("*") or write_permissions.get("*")
                 log.info("Fallback to wildcard role '*': %s", role_permissions)
                 if role_permissions is None:
                     continue
@@ -60,6 +58,67 @@ class SQLRestoreSchemaQueryHandler(SQLSchemaQueryHandler):
                 return True
 
         return False
+
+    def _template_where(self, expr: str) -> str:
+        """Template substitution for WHERE clause expressions with claim values."""
+        if not expr:
+            return expr
+
+        def _quote(val: object) -> str:
+            if val is None:
+                return "NULL"
+            if isinstance(val, (int, float)):
+                return str(val)
+            s = str(val).replace("'", "''")
+            return f"'{s}'"
+
+        def _replace(m: Match[str]) -> str:
+            key = m.group(1)
+            return _quote(self.extract_injected_value(f"claim:{key}"))
+
+        return re.sub(r"\$\{claims\.([A-Za-z0-9_]+)\}", _replace, expr)
+
+    def _row_where_clause(self) -> str:
+        """
+        Generate row-level WHERE clause based on restore permissions
+        (falling back to write permissions, matching check_permission's own
+        restore->write fallback), so a role's restore grant is scoped to
+        the rows the permission model allows.
+        """
+        perms = getattr(self.schema_object, "permissions", None) or {}
+        if "default" in perms:
+            provider = perms.get("default", {}) or {}
+            restore_map = provider.get("restore", {}) or {}
+            write_map = provider.get("write", {}) or {}
+            role_permissions = perms.get("default", {})
+        else:
+            restore_map = {}
+            write_map = {}
+            role_permissions = perms
+            for role, role_perms in perms.items():
+                if isinstance(role_perms, dict):
+                    restore_map[role] = role_perms.get("restore")
+                    write_map[role] = role_perms.get("write")
+
+        filters = []
+        for role in self.operation.roles or []:
+            role_where = None
+            if isinstance(role_permissions.get(role), dict):
+                role_where = role_permissions[role].get("where")
+
+            operation_where = None
+            rule = restore_map.get(role) or write_map.get(role)
+            if isinstance(rule, dict):
+                operation_where = rule.get("where")
+
+            where_clause = operation_where if operation_where else role_where
+
+            if isinstance(where_clause, str) and where_clause.strip():
+                filters.append(self._template_where(where_clause))
+
+        if not filters:
+            return ""
+        return "(" + ") OR (".join(filters) + ")"
 
     def _get_restore_update_values(self) -> str:
         """Generate SET clause for restore operation."""
@@ -114,14 +173,10 @@ class SQLRestoreSchemaQueryHandler(SQLSchemaQueryHandler):
 
         for name, value in self.operation.query_params.items():
             if "." in name:
-                raise ApplicationException(
-                    400, "Selection on relations is not supported"
-                )
+                raise ApplicationException(400, "Selection on relations is not supported")
             prop = self.schema_object.properties.get(name)
             if not prop:
-                raise ApplicationException(
-                    500, f"Search condition column not found {name}"
-                )
+                raise ApplicationException(500, f"Search condition column not found {name}")
 
             assignment, holders = self.search_value_assignment(prop, value)
             conditions.append(assignment)
@@ -131,6 +186,12 @@ class SQLRestoreSchemaQueryHandler(SQLSchemaQueryHandler):
         soft_delete_conditions = self._get_soft_delete_restore_conditions()
         if soft_delete_conditions:
             conditions.append(f"({soft_delete_conditions})")
+
+        # Add row-level permission filter, scoping which rows a role may
+        # restore (e.g. tenant/ownership), matching update/delete.
+        row_filter = self._row_where_clause()
+        if row_filter:
+            conditions.append(f"({row_filter})")
 
         return f" WHERE {' AND '.join(conditions)}" if conditions else ""
 
@@ -157,8 +218,7 @@ class SQLRestoreSchemaQueryHandler(SQLSchemaQueryHandler):
                 if excluded_values:
                     # For restore, we want records that ARE in the excluded values
                     formatted_values = ", ".join(
-                        f"'{val}'" if isinstance(val, str) else str(val)
-                        for val in excluded_values
+                        f"'{val}'" if isinstance(val, str) else str(val) for val in excluded_values
                     )
                     conditions.append(f"{column_name} IN ({formatted_values})")
 
@@ -177,17 +237,13 @@ class SQLRestoreSchemaQueryHandler(SQLSchemaQueryHandler):
         if not self.schema_object.has_soft_delete_support():
             raise ApplicationException(
                 400,
-                f"Schema object {self.schema_object.api_name} does not support "
-                + "soft delete operations",
+                f"Schema object {self.schema_object.api_name} does not support " + "soft delete operations",
             )
 
         update_clause = self._get_restore_update_values()
         if not update_clause:
-            raise ApplicationException(
-                400, f"No restore fields available for {self.schema_object.api_name}"
-            )
+            raise ApplicationException(400, f"No restore fields available for {self.schema_object.api_name}")
 
         return (
-            f"UPDATE {self.table_expression}{update_clause}"
-            + f"{self.search_condition} RETURNING {self.select_list}"
+            f"UPDATE {self.table_expression}{update_clause}" + f"{self.search_condition} RETURNING {self.select_list}"
         )

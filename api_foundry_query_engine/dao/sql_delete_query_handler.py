@@ -1,3 +1,5 @@
+import re
+from typing import Match
 from api_foundry_query_engine.dao.sql_query_handler import SQLSchemaQueryHandler
 from api_foundry_query_engine.operation import Operation
 from api_foundry_query_engine.utils.app_exception import ApplicationException
@@ -8,10 +10,82 @@ log = logger(__name__)
 
 
 class SQLDeleteSchemaQueryHandler(SQLSchemaQueryHandler):
-    def __init__(
-        self, operation: Operation, schema_object: SchemaObject, engine: str
-    ) -> None:
+    def __init__(self, operation: Operation, schema_object: SchemaObject, engine: str) -> None:
         super().__init__(operation, schema_object, engine)
+
+    def _template_where(self, expr: str) -> str:
+        """Template substitution for WHERE clause expressions with claim values."""
+        if not expr:
+            return expr
+
+        def _quote(val: object) -> str:
+            if val is None:
+                return "NULL"
+            if isinstance(val, (int, float)):
+                return str(val)
+            s = str(val).replace("'", "''")
+            return f"'{s}'"
+
+        def _replace(m: Match[str]) -> str:
+            key = m.group(1)
+            return _quote(self.extract_injected_value(f"claim:{key}"))
+
+        return re.sub(r"\$\{claims\.([A-Za-z0-9_]+)\}", _replace, expr)
+
+    def _row_where_clause(self) -> str:
+        """
+        Generate row-level WHERE clause based on delete permissions, so a
+        role's delete grant is scoped to the rows the permission model
+        allows (e.g. tenant/ownership), the same way select and update
+        already are.
+        """
+        perms = getattr(self.schema_object, "permissions", None) or {}
+        if "default" in perms:
+            provider = perms.get("default", {}) or {}
+            delete_map = provider.get("delete", {}) or {}
+            role_permissions = perms.get("default", {})
+        else:
+            delete_map = {}
+            role_permissions = perms
+            for role, role_perms in perms.items():
+                if isinstance(role_perms, dict):
+                    delete_map[role] = role_perms.get("delete")
+
+        filters = []
+        for role in self.operation.roles or []:
+            role_where = None
+            if isinstance(role_permissions.get(role), dict):
+                role_where = role_permissions[role].get("where")
+
+            operation_where = None
+            rule = delete_map.get(role)
+            if isinstance(rule, dict):
+                operation_where = rule.get("where")
+
+            where_clause = operation_where if operation_where else role_where
+
+            if isinstance(where_clause, str) and where_clause.strip():
+                filters.append(self._template_where(where_clause))
+
+        if not filters:
+            return ""
+        return "(" + ") OR (".join(filters) + ")"
+
+    @property
+    def search_condition(self) -> str:
+        """
+        Add permission-based row-level WHERE clause on top of the base
+        query-param search condition, matching SQLUpdateSchemaQueryHandler.
+        """
+        base_condition = super().search_condition
+        row_filter = self._row_where_clause()
+
+        if base_condition and row_filter:
+            return f"{base_condition} AND ({row_filter})"
+        elif row_filter:
+            return f" WHERE ({row_filter})"
+        else:
+            return base_condition
 
     def check_permission(self) -> bool:
         """
@@ -108,9 +182,7 @@ class SQLDeleteSchemaQueryHandler(SQLSchemaQueryHandler):
     @property
     def sql(self) -> str:
         if not self.check_permission():
-            raise ApplicationException(
-                403, f"Subject is not allowed to delete {self.schema_object.api_name}"
-            )
+            raise ApplicationException(403, f"Subject is not allowed to delete {self.schema_object.api_name}")
 
         concurrency_property = self.schema_object.concurrency_property
         if concurrency_property:
@@ -139,7 +211,4 @@ class SQLDeleteSchemaQueryHandler(SQLSchemaQueryHandler):
             )
         else:
             # Fall back to hard delete for tables without soft delete support
-            return (
-                f"DELETE FROM {self.table_expression}{self.search_condition} "
-                + f"RETURNING {self.select_list}"
-            )
+            return f"DELETE FROM {self.table_expression}{self.search_condition} " + f"RETURNING {self.select_list}"
