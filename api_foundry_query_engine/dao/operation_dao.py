@@ -53,44 +53,26 @@ class OperationDAO(DAO):
     @property
     def query_handler(self) -> SQLQueryHandler:
         if not hasattr(self, "_query_handler"):
-            path_operation = get_path_operation(
-                self.operation.entity, self.operation.action
-            )
+            path_operation = get_path_operation(self.operation.entity, self.operation.action)
             if path_operation:
-                self._query_handler = SQLCustomQueryHandler(
-                    self.operation, path_operation, self.engine
-                )
+                self._query_handler = SQLCustomQueryHandler(self.operation, path_operation, self.engine)
                 return self._query_handler
 
             schema_object = get_schema_object(self.operation.entity)
             if not schema_object:
-                raise ApplicationException(
-                    500, f"Unknown operation: {self.operation.entity}"
-                )
+                raise ApplicationException(500, f"Unknown operation: {self.operation.entity}")
             if self.operation.action == "read":
-                self._query_handler = SQLSelectSchemaQueryHandler(
-                    self.operation, schema_object, self.engine
-                )
+                self._query_handler = SQLSelectSchemaQueryHandler(self.operation, schema_object, self.engine)
             elif self.operation.action == "create":
-                self._query_handler = SQLInsertSchemaQueryHandler(
-                    self.operation, schema_object, self.engine
-                )
+                self._query_handler = SQLInsertSchemaQueryHandler(self.operation, schema_object, self.engine)
             elif self.operation.action == "update":
-                self._query_handler = SQLUpdateSchemaQueryHandler(
-                    self.operation, schema_object, self.engine
-                )
+                self._query_handler = SQLUpdateSchemaQueryHandler(self.operation, schema_object, self.engine)
             elif self.operation.action == "delete":
-                self._query_handler = SQLDeleteSchemaQueryHandler(
-                    self.operation, schema_object, self.engine
-                )
+                self._query_handler = SQLDeleteSchemaQueryHandler(self.operation, schema_object, self.engine)
             elif self.operation.action == "restore":
-                self._query_handler = SQLRestoreSchemaQueryHandler(
-                    self.operation, schema_object, self.engine
-                )
+                self._query_handler = SQLRestoreSchemaQueryHandler(self.operation, schema_object, self.engine)
             else:
-                raise ApplicationException(
-                    400, f"Invalid operation action: {self.operation.action}"
-                )
+                raise ApplicationException(400, f"Invalid operation action: {self.operation.action}")
         return self._query_handler
 
     def execute(self, connector, operation=None) -> Union[list[dict], dict]:
@@ -118,8 +100,11 @@ class OperationDAO(DAO):
             # Extract batch request from store_params
             batch_request = op.store_params
 
-            # Execute batch
-            handler = BatchOperationHandler(batch_request, connector, self.engine)
+            # Execute batch. The authenticated caller's claims (op.claims)
+            # are passed explicitly so every sub-operation runs with the
+            # real caller's identity/roles, never anything from the batch
+            # request body.
+            handler = BatchOperationHandler(batch_request, connector, self.engine, claims=op.claims)
             return handler.execute()
 
         # Standard operation handling
@@ -147,9 +132,7 @@ class OperationDAO(DAO):
                 continue
 
             child_set = self.__fetch_record_set(
-                SQLSubselectSchemaQueryHandler(
-                    self.operation, relation, self.query_handler  # type: ignore
-                ),
+                SQLSubselectSchemaQueryHandler(self.operation, relation, self.query_handler),  # type: ignore
                 cursor,
             )
             if len(child_set) == 0:
@@ -168,16 +151,12 @@ class OperationDAO(DAO):
                 if parent:
                     parent[name].append(child)
 
-    def __fetch_record_set(
-        self, query_handler: SQLQueryHandler, cursor: Cursor
-    ) -> list[dict]:
+    def __fetch_record_set(self, query_handler: SQLQueryHandler, cursor: Cursor) -> list[dict]:
         sql = query_handler.sql
         if not sql:
             return []
 
-        record_set = cursor.execute(
-            sql, query_handler.placeholders, query_handler.selection_results
-        )
+        record_set = cursor.execute(sql, query_handler.placeholders, query_handler.selection_results)
         result = []
         for record in record_set:
             object = query_handler.marshal_record(record)

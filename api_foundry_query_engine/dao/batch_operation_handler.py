@@ -19,7 +19,13 @@ log = logger(__name__)
 class BatchOperationHandler:
     """Handles execution of batch operations with dependencies."""
 
-    def __init__(self, batch_request: Dict[str, Any], connection, engine: str):
+    def __init__(
+        self,
+        batch_request: Dict[str, Any],
+        connection,
+        engine: str,
+        claims: Optional[Dict[str, Any]] = None,
+    ):
         """
         Initialize the batch operation handler.
 
@@ -27,11 +33,16 @@ class BatchOperationHandler:
             batch_request: Batch request with 'operations' and 'options'
             connection: Database connection for executing operations
             engine: Database engine type (postgres, mysql, etc.)
+            claims: The authenticated caller's claims (roles, sub, etc.),
+                applied to every sub-operation in the batch. This must come
+                from the token-validated top-level request, never from the
+                batch request body.
         """
         self.operations = batch_request.get("operations", [])
         self.options = batch_request.get("options", {})
         self.connection = connection
         self.engine = engine
+        self.claims = claims or {}
         self.results: Dict[str, Dict[str, Any]] = {}
         self.failed_operations: List[str] = []
 
@@ -45,15 +56,12 @@ class BatchOperationHandler:
     def _validate_batch_request(self):
         """Validate the batch request structure."""
         if not self.operations:
-            raise ApplicationException(
-                400, "Batch request must contain at least one operation"
-            )
+            raise ApplicationException(400, "Batch request must contain at least one operation")
 
         if len(self.operations) > 100:
             raise ApplicationException(
                 400,
-                f"Batch size exceeds maximum (100). "
-                f"Requested: {len(self.operations)}",
+                f"Batch size exceeds maximum (100). " f"Requested: {len(self.operations)}",
             )
 
         # Auto-generate IDs for operations that don't have them
@@ -86,6 +94,18 @@ class BatchOperationHandler:
                 raise ApplicationException(
                     400,
                     f"Operation '{op['id']}' has invalid action " f"'{op['action']}'",
+                )
+
+            # Sub-operations always run with the authenticated caller's
+            # claims (see __init__). A client-supplied 'claims' field would
+            # let a request forge its own roles/subject/tenant for a
+            # sub-operation, so reject it outright rather than silently
+            # ignoring it.
+            if "claims" in op:
+                raise ApplicationException(
+                    400,
+                    f"Operation '{op['id']}' must not specify 'claims'; "
+                    "the authenticated caller's claims are always used",
                 )
 
     def execute(self) -> Dict[str, Any]:
@@ -238,27 +258,20 @@ class BatchOperationHandler:
 
         # Resolve references in parameters
         ref_resolver = ReferenceResolver(self.results)
-        query_params = ref_resolver.resolve_parameters(
-            op_def.get("query_params", {}), op_id
-        )
-        store_params = ref_resolver.resolve_parameters(
-            op_def.get("store_params", {}), op_id
-        )
-        metadata_params = ref_resolver.resolve_parameters(
-            op_def.get("metadata_params", {}), op_id
-        )
+        query_params = ref_resolver.resolve_parameters(op_def.get("query_params", {}), op_id)
+        store_params = ref_resolver.resolve_parameters(op_def.get("store_params", {}), op_id)
+        metadata_params = ref_resolver.resolve_parameters(op_def.get("metadata_params", {}), op_id)
 
-        # Get claims from operation or use empty dict
-        claims = op_def.get("claims", {})
-
-        # Create Operation object
+        # Create Operation object. Always use the authenticated batch
+        # caller's claims (self.claims) - never anything from the request
+        # body - so a sub-operation cannot run with forged roles/subject.
         operation = Operation(
             entity=op_def["entity"],
             action=op_def["action"],
             query_params=query_params,
             store_params=store_params,
             metadata_params=metadata_params,
-            claims=claims,
+            claims=dict(self.claims),
         )
 
         log.debug(
