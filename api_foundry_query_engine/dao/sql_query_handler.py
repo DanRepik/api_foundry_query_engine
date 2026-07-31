@@ -208,7 +208,24 @@ class SQLQueryHandler:
             action_permissions,
         )
 
+        # A `public` rule means "world-readable regardless of who's
+        # calling" -- apply it unconditionally rather than only when the
+        # caller's own role list happens to literally contain the string
+        # "public" (which previously only happened by accident, via the
+        # anonymous-role fallback for token-less requests; an
+        # authenticated caller hitting a nominally-public resource would
+        # otherwise be filtered down to zero properties).
+        public_permissions = action_permissions.get("public", {})
+        if public_permissions:
+            regex_pattern = self._extract_permission_pattern(public_permissions)
+            if regex_pattern:
+                public_allowed = self._filter_properties_by_regex(properties, regex_pattern)
+                log.info("public rule, pattern: %s, matched: %s", regex_pattern, list(public_allowed.keys()))
+                allowed_properties.update(public_allowed)
+
         for role in self.operation.roles:
+            if role == "public":
+                continue  # already applied unconditionally above
             role_permissions = action_permissions.get(role, {})
             log.info("role: %s, role_permissions: %s", role, role_permissions)
 
@@ -359,7 +376,7 @@ class SQLQueryHandler:
             ]
             sql = f"{column} {'NOT ' if operand == 'not-in' else ''}IN ({', '.join(assignments)})"  # noqa E501
         elif operand in ["like", "not-like"]:
-            sql = f"{column} {'NOT ' if operand == 'not-like' else ''}LIKE {self.placeholder(property, str(placeholder_name))}"
+            sql = f"{column} {'NOT ' if operand == 'not-like' else ''}LIKE {self.placeholder(property, str(placeholder_name))}"  # noqa E501
         else:
             sql = f"{column} {operand} {self.placeholder(property, str(placeholder_name))}"
         return sql

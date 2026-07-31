@@ -1,3 +1,4 @@
+import json
 from typing import Any, Dict, List, Optional
 
 from api_foundry_query_engine.utils.logger import logger
@@ -95,8 +96,43 @@ class Operation:
 
     @property
     def roles(self) -> List[str]:
-        """Get the roles from claims."""
-        return self.claims.get("roles", []) if self.claims else []
+        """Get the roles from claims.
+
+        Falls back to a singular `role` claim plus `groups` when the
+        plural `roles` key itself isn't present -- some authorizers (e.g.
+        a custom Lambda TOKEN authorizer following AWS's own convention
+        of a `role` string and a `groups` list) never populate `roles`,
+        which previously made every such caller look role-less even with
+        a perfectly valid, correctly-scoped token. `groups` may arrive as
+        a real list or, when it passed through an API Gateway authorizer
+        context (whose values must be strings), a JSON-encoded string.
+        """
+        if not self.claims:
+            return []
+        roles = self.claims.get("roles")
+        if roles:
+            return list(roles) if isinstance(roles, list) else [str(roles)]
+
+        fallback: List[str] = []
+        role = self.claims.get("role")
+        if role:
+            fallback.append(str(role))
+
+        groups_raw = self.claims.get("groups")
+        groups: List[str] = []
+        if isinstance(groups_raw, str) and groups_raw.strip():
+            try:
+                parsed = json.loads(groups_raw)
+                groups = [str(item) for item in parsed] if isinstance(parsed, list) else [groups_raw]
+            except (TypeError, ValueError):
+                groups = [groups_raw]
+        elif isinstance(groups_raw, list):
+            groups = [str(item) for item in groups_raw]
+
+        for group in groups:
+            if group not in fallback:
+                fallback.append(group)
+        return fallback
 
     def subject(self) -> Optional[str]:
         """Get the subject from claims."""
