@@ -35,23 +35,31 @@ class ConnectionFactory:
         log.info("database: %s", database)
         db_config = self.db_config_map.get(database)
         if not db_config:
-            # Use config dict for secrets
-            secrets_map = self.config.get("SECRETS", {})
-            if isinstance(secrets_map, str):
-                secrets_map = json.loads(secrets_map)
-            secret_name = secrets_map.get(database)
-            log.debug("secret_name: %s", secret_name)
-
-            if secret_name:
-                db_config = self.__get_secret(secret_name)
+            # A <DATABASE>_DSN config value (e.g. CONTRACT_DB_DSN) skips
+            # Secrets Manager entirely. This matters for a Lambda that's
+            # VPC-attached for private database access but has no route
+            # to the Secrets Manager API (no NAT gateway, no interface
+            # endpoint) -- the SECRETS/get_secret_value path would just
+            # hang. PostgresConnection already accepts a raw "dsn" key.
+            dsn = self.config.get(f"{database.upper()}_DSN")
+            if dsn:
+                db_config = {"engine": self.config.get(f"{database.upper()}_ENGINE", "postgres"), "dsn": dsn}
             else:
-                raise ValueError(f"Secret not found for database: {database}")
+                # Use config dict for secrets
+                secrets_map = self.config.get("SECRETS", {})
+                if isinstance(secrets_map, str):
+                    secrets_map = json.loads(secrets_map)
+                secret_name = secrets_map.get(database)
+                log.debug("secret_name: %s", secret_name)
+
+                if secret_name:
+                    db_config = self.__get_secret(secret_name)
+                else:
+                    raise ValueError(f"Secret not found for database: {database}")
 
         engine = db_config.get("engine")
         if not engine:
-            raise ApplicationException(
-                500, "Database 'engine' is not defined in the secret."
-            )
+            raise ApplicationException(500, "Database 'engine' is not defined in the secret.")
 
         if engine == "postgres":
             from .postgres_connection import PostgresConnection
