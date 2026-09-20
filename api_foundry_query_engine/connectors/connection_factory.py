@@ -35,27 +35,49 @@ class ConnectionFactory:
         log.info("database: %s", database)
         db_config = self.db_config_map.get(database)
         if not db_config:
-            # A <DATABASE>_DSN config value (e.g. CONTRACT_DB_DSN) skips
-            # Secrets Manager entirely. This matters for a Lambda that's
-            # VPC-attached for private database access but has no route
-            # to the Secrets Manager API (no NAT gateway, no interface
-            # endpoint) -- the SECRETS/get_secret_value path would just
-            # hang. PostgresConnection already accepts a raw "dsn" key.
-            dsn = self.config.get(f"{database.upper()}_DSN")
-            if dsn:
-                db_config = {"engine": self.config.get(f"{database.upper()}_ENGINE", "postgres"), "dsn": dsn}
+            # A <DATABASE>_DATA_API_CLUSTER_ARN config value selects the
+            # RDS Data API connector and, like the DSN branch below, skips
+            # Secrets Manager entirely -- the Data API looks up the
+            # credentials server-side from secret_arn, so this Lambda
+            # never needs secretsmanager:GetSecretValue or a password in
+            # its own environment at all (not even to work around VPC
+            # egress, since a Data API Lambda isn't VPC-attached).
+            data_api_cluster_arn = self.config.get(f"{database.upper()}_DATA_API_CLUSTER_ARN")
+            if data_api_cluster_arn:
+                db_config = {
+                    "engine": "postgres-data-api",
+                    "resource_arn": data_api_cluster_arn,
+                    "secret_arn": self.config.get(f"{database.upper()}_DATA_API_SECRET_ARN"),
+                    "database": self.config.get(f"{database.upper()}_DATA_API_DATABASE"),
+                }
+                schema = self.config.get(f"{database.upper()}_DATA_API_SCHEMA")
+                if schema:
+                    db_config["schema"] = schema
+                endpoint_url = self.config.get("AWS_ENDPOINT_URL")  # LocalStack endpoint
+                if endpoint_url:
+                    db_config["endpoint_url"] = endpoint_url
             else:
-                # Use config dict for secrets
-                secrets_map = self.config.get("SECRETS", {})
-                if isinstance(secrets_map, str):
-                    secrets_map = json.loads(secrets_map)
-                secret_name = secrets_map.get(database)
-                log.debug("secret_name: %s", secret_name)
-
-                if secret_name:
-                    db_config = self.__get_secret(secret_name)
+                # A <DATABASE>_DSN config value (e.g. CONTRACT_DB_DSN) skips
+                # Secrets Manager entirely. This matters for a Lambda that's
+                # VPC-attached for private database access but has no route
+                # to the Secrets Manager API (no NAT gateway, no interface
+                # endpoint) -- the SECRETS/get_secret_value path would just
+                # hang. PostgresConnection already accepts a raw "dsn" key.
+                dsn = self.config.get(f"{database.upper()}_DSN")
+                if dsn:
+                    db_config = {"engine": self.config.get(f"{database.upper()}_ENGINE", "postgres"), "dsn": dsn}
                 else:
-                    raise ValueError(f"Secret not found for database: {database}")
+                    # Use config dict for secrets
+                    secrets_map = self.config.get("SECRETS", {})
+                    if isinstance(secrets_map, str):
+                        secrets_map = json.loads(secrets_map)
+                    secret_name = secrets_map.get(database)
+                    log.debug("secret_name: %s", secret_name)
+
+                    if secret_name:
+                        db_config = self.__get_secret(secret_name)
+                    else:
+                        raise ValueError(f"Secret not found for database: {database}")
 
         engine = db_config.get("engine")
         if not engine:
@@ -65,6 +87,11 @@ class ConnectionFactory:
             from .postgres_connection import PostgresConnection
 
             return PostgresConnection(db_config)
+
+        if engine == "postgres-data-api":
+            from .data_api_connection import DataApiConnection
+
+            return DataApiConnection(db_config)
 
         # Add support for other engines here if needed in the future
 

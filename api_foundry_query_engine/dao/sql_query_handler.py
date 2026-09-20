@@ -108,6 +108,24 @@ RELATIONAL_TYPES = {
     "not-like": "not-like",
 }
 
+# The RDS Data API sends every parameter as a plain typed value (string,
+# long, double, boolean, null) with no column context, so Postgres can't
+# implicitly coerce it the way it does a psycopg2 %s literal -- comparing
+# an untyped string against a uuid/jsonb/timestamptz column fails with
+# "operator does not exist". Casting the placeholder itself (`:x::uuid`)
+# fixes this under the Data API and is a no-op under psycopg2, which
+# never sees this branch. Keyed on SchemaObjectProperty.column_type.
+DATA_API_COLUMN_CASTS = {
+    "uuid": "uuid",
+    "date": "date",
+    "time": "time",
+    "timetz": "timetz",
+    "date-time": "timestamptz",
+    "datetime": "timestamptz",
+    "timestamp": "timestamptz",
+    "timestamptz": "timestamptz",
+}
+
 
 class SQLQueryHandler:
     operation: Operation
@@ -163,6 +181,16 @@ class SQLQueryHandler:
             elif property.column_type == "time":
                 return f"TO_TIME(:{param}, 'HH24:MI:SS.FF')"
             return f":{param}"
+        if self.engine == "postgres-data-api":
+            # JSON-serialized properties (embedded objects/arrays, see
+            # SQLInsertSchemaQueryHandler.insert_values) always need a
+            # jsonb cast regardless of the declared column_type, since
+            # they arrive as a JSON-text string rather than going through
+            # convert_to_db_value.
+            if property.api_type in ("object", "array"):
+                return f":{param}::jsonb"
+            cast = DATA_API_COLUMN_CASTS.get(property.column_type)
+            return f":{param}::{cast}" if cast else f":{param}"
         return f"%({param})s"
 
     def check_permissions(
