@@ -886,6 +886,56 @@ AWS Secrets Manager secret should contain:
 }
 ```
 
+### RDS Data API Connector (`postgres-data-api`)
+
+For a Lambda that must reach a private (`PubliclyAccessible=False`) Aurora
+cluster *without* being VPC-attached, select the `postgres-data-api` engine
+instead of `postgres`. Every call becomes a plain HTTPS request to the
+`rds-data` API, authenticated by IAM, with the database credentials looked
+up server-side from the secret -- so unlike a VPC-attached Lambda working
+around no NAT/no Secrets Manager endpoint by passing a DSN through the
+environment, a Data API Lambda never needs `secretsmanager:GetSecretValue`
+and never has a password in its own environment, logs, or Pulumi output.
+
+Configure it per-database with plain (non-secret) environment variables,
+following the same `<DATABASE>_*` convention as `<DATABASE>_DSN`:
+
+```bash
+export CEP_DATA_API_CLUSTER_ARN="arn:aws:rds:us-east-1:123456789012:cluster:cep"
+export CEP_DATA_API_SECRET_ARN="arn:aws:secretsmanager:us-east-1:123456789012:secret:cep-db"
+export CEP_DATA_API_DATABASE="cep"
+export CEP_DATA_API_SCHEMA="contract_app"   # optional
+```
+
+The Lambda's IAM role needs `rds-data:ExecuteStatement`,
+`rds-data:BeginTransaction`, `rds-data:CommitTransaction`,
+`rds-data:RollbackTransaction` on the cluster, and
+`secretsmanager:GetSecretValue` on the secret (that permission is used by
+the RDS Data API service itself, not by this Lambda).
+
+**Explicit casts on hand-written `x-af-sql` routes.** For schema-driven
+operations (the generated CRUD routes), `SQLQueryHandler.placeholder()`
+already emits the right cast for typed columns (`:id::uuid`,
+`:metadata::jsonb`, `:occurred_at::timestamptz`, ...) because it knows
+each parameter's declared `column_type`. A hand-written `x-af-sql` route
+has no such schema binding, so cast any placeholder bound to a
+non-`text` column yourself, the same way the example above casts none
+because every column it touches is already `text`/numeric:
+
+```sql
+SELECT * FROM widget WHERE id = :id::uuid
+```
+
+Without the cast, the Data API sends `:id` as an untyped string and
+Postgres rejects the comparison (`operator does not exist: uuid = text`)
+-- this only affects `postgres-data-api`; the same route runs fine
+uncast under the `postgres`/psycopg2 connector, which lets the driver
+infer the type from context.
+
+The `postgres` (psycopg2) connector remains available and is what local
+development and the integration tests use; `postgres-data-api` is
+intended for VPC-egress-constrained Lambda deployments.
+
 ## Examples & Patterns
 
 ### CRUD Operations
