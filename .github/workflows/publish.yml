@@ -41,6 +41,11 @@ jobs:
           python-version: "3.x"
       - run: python -m pip install --upgrade pip
       - run: pip install -e .[dev]
+      # Not in the dev extra -- see pytest.yml's comment: published
+      # fixture_foundry (0.2.4) has a real bug, fixed upstream but not
+      # yet released, and a git-pinned dependency here would break every
+      # publish the same way cloud_foundry's did (DanRepik/cloud_foundry#11).
+      - run: pip install git+https://github.com/DanRepik/fixture_foundry.git@fix/fixtures-stale-teardown-calls
       - run: pytest tests
 
   build:

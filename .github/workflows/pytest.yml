@@ -28,6 +28,16 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -e .[dev]
+          # Published fixture_foundry (0.2.4) has a real bug in its
+          # container_network/postgres/localstack pytest fixtures (each
+          # passes an unsupported teardown= kwarg into its own context
+          # manager -- TypeError at fixture setup). Fixed upstream but not
+          # yet released to PyPI: DanRepik/fixture_foundry#4. Not declared
+          # in pyproject.toml as a git dependency -- PyPI rejects any
+          # package whose metadata has a direct URL/VCS dependency, even
+          # in an optional extra (see DanRepik/cloud_foundry#11) -- so it's
+          # installed here as a separate step instead.
+          pip install git+https://github.com/DanRepik/fixture_foundry.git@fix/fixtures-stale-teardown-calls
 
       - name: Run pytest
         run: pytest tests
