@@ -37,7 +37,7 @@ jobs:
           # package whose metadata has a direct URL/VCS dependency, even
           # in an optional extra (see DanRepik/cloud_foundry#11) -- so it's
           # installed here as a separate step instead.
-          pip install git+https://github.com/DanRepik/fixture_foundry.git@fix/fixtures-stale-teardown-calls
+          pip install --force-reinstall --no-deps git+https://github.com/DanRepik/fixture_foundry.git@fix/fixtures-stale-teardown-calls
 
       - name: Run pytest
         run: pytest tests
