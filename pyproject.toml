@@ -1,5 +1,10 @@
 [build-system]
-requires = ["hatchling>=1.0"]
+# hatchling>=1.32.0 emits Metadata-Version: 2.5, which PyPI's Warehouse
+# rejects outright with a 400 on every upload regardless of package
+# version -- see https://github.com/pypi/warehouse/issues/19083 (open,
+# unresolved). Pinned below that until Warehouse adds 2.5 support (same
+# fix applied to cloud_foundry, see DanRepik/cloud_foundry#10).
+requires = ["hatchling>=1.0,<1.32.0"]
 build-backend = "hatchling.build"
 
 [project]
@@ -28,6 +33,14 @@ dev = [
     "fixture_foundry>=0.1.0",
     "simple-oauth-server",
     "pulumi>=3.224.0",
+    # tests/conftest.py imports this directly; was missing here entirely
+    # until CI first ran the test suite and caught it (same gap found in
+    # api_foundry, which uses psycopg2-binary the same way).
+    "psycopg2-binary",
+    # fixture_foundry imports this at module load time (fixtures.py);
+    # missing here caused an ImportError from conftest.py's own
+    # `from fixture_foundry import deploy` before any test could run.
+    "docker",
 ]
 
 [project.urls]

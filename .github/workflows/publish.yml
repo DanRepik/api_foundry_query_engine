@@ -1,0 +1,92 @@
+name: publish
+
+# Builds and publishes api-foundry-query-engine to PyPI when a GitHub
+# Release is published. Versioning is NOT tag-derived:
+# api_foundry_query_engine/__init__.py's `__version__ = "x.y.z"` is the
+# source of truth (read via [tool.hatch.version] in pyproject.toml), so
+# the check below fails fast if the release tag doesn't match it -- PyPI
+# rejects a re-upload of an already-published version.
+#
+# Tag releases as vX.Y.Z (e.g. v0.8.83) to match a matching __version__
+# in api_foundry_query_engine/__init__.py.
+#
+# This bypasses pyproject.toml's [tool.hatch.publish.index] disable=true
+# (a `hatch publish` guard, for laptop safety) since this workflow builds
+# with `python -m build` and publishes via pypa/gh-action-pypi-publish,
+# not hatch's own publish command -- this workflow is the sanctioned
+# publish path going forward.
+#
+# Publishing uses PyPI Trusted Publishing (OIDC) -- no PyPI token is
+# stored anywhere. One-time setup: on the api-foundry-query-engine
+# project's PyPI page, Settings > Publishing > add a GitHub trusted
+# publisher for owner=DanRepik, repo=api_foundry_query_engine,
+# workflow=publish.yml, environment=pypi.
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      AWS_DEFAULT_REGION: us-east-1
+      AWS_REGION: us-east-1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - run: python -m pip install --upgrade pip
+      - run: pip install -e .[dev]
+      # Not in the dev extra -- see pytest.yml's comment: published
+      # fixture_foundry (0.2.4) has a real bug, fixed upstream but not
+      # yet released, and a git-pinned dependency here would break every
+      # publish the same way cloud_foundry's did (DanRepik/cloud_foundry#11).
+      - run: pip install --force-reinstall --no-deps git+https://github.com/DanRepik/fixture_foundry.git@fix/fixtures-stale-teardown-calls
+      - run: pytest tests
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Check release tag matches package version
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME#v}"
+          pkg_version="$(python -c "import re; print(re.search(r'__version__\s*=\s*[\"\x27]([^\"\x27]+)[\"\x27]', open('api_foundry_query_engine/__init__.py').read()).group(1))")"
+          if [ "$tag" != "$pkg_version" ]; then
+            echo "::error::Release tag '${GITHUB_REF_NAME}' does not match api_foundry_query_engine/__init__.py version '${pkg_version}'. Bump the version and re-tag before publishing."
+            exit 1
+          fi
+
+      - name: Install build backend
+        run: python -m pip install --upgrade pip build
+
+      - name: Build sdist and wheel
+        run: python -m build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
