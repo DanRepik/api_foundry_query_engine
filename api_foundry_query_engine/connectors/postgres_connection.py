@@ -1,4 +1,8 @@
-from api_foundry_query_engine.connectors.connection import Connection, Cursor
+from api_foundry_query_engine.connectors.connection import (
+    Connection,
+    Cursor,
+    map_columns_to_selection_keys,
+)
 from api_foundry_query_engine.utils.logger import logger
 
 # Initialize the logger
@@ -37,15 +41,11 @@ class PostgresCursor(Cursor):
             # "m.media_type_id"). Match on the bare name but keep
             # selection_results' own key (qualified or not) in the output,
             # since downstream code looks records up by that exact key.
-            bare_to_key = {key.rsplit(".", 1)[-1]: key for key in selection_results}
             column_names = [desc[0] for desc in (self.__cursor.description or ())]
+            position_keys = map_columns_to_selection_keys(column_names, selection_results)
             result = []
             for record in self.__cursor:
-                row = {}
-                for col, value in zip(column_names, record):
-                    key = bare_to_key.get(col)
-                    if key is not None:
-                        row[key] = value
+                row = {key: value for key, value in zip(position_keys, record) if key is not None}
                 result.append(row)
 
             return result

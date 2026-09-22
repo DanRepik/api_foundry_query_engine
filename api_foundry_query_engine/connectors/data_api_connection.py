@@ -8,7 +8,11 @@ from typing import Any, Optional
 import boto3
 from botocore.config import Config as BotoConfig
 
-from api_foundry_query_engine.connectors.connection import Connection, Cursor
+from api_foundry_query_engine.connectors.connection import (
+    Connection,
+    Cursor,
+    map_columns_to_selection_keys,
+)
 from api_foundry_query_engine.utils.app_exception import ApplicationException
 from api_foundry_query_engine.utils.logger import logger
 
@@ -175,15 +179,18 @@ class DataApiCursor(Cursor):
 
         column_metadata = response.get("columnMetadata") or []
         columns = [(meta.get("name"), meta.get("typeName")) for meta in column_metadata]
-        selected_columns = set(selection_results)
+        # column_metadata's "name" is always bare, even when
+        # selection_results' keys are table-alias-qualified (e.g.
+        # "m.media_type_id") -- see postgres_connection.py's PostgresCursor
+        # for the same mapping against psycopg2's cursor.description.
+        position_keys = map_columns_to_selection_keys([name for name, _ in columns], selection_results)
 
         result = []
         for record in records:
-            row = {
-                name: _decode_field(field, type_name)
-                for (name, type_name), field in zip(columns, record)
-                if name in selected_columns
-            }
+            row = {}
+            for key, (_, type_name), field in zip(position_keys, columns, record):
+                if key is not None:
+                    row[key] = _decode_field(field, type_name)
             result.append(row)
         return result
 
