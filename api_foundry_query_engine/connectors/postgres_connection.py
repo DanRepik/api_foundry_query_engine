@@ -32,16 +32,20 @@ class PostgresCursor(Cursor):
         try:
             # Execute the SQL statement with parameters
             self.__cursor.execute(sql, params)
-            selected_columns = set(selection_results)
+            # cursor.description always returns bare column names, even
+            # when selection_results' keys are table-alias-qualified (e.g.
+            # "m.media_type_id"). Match on the bare name but keep
+            # selection_results' own key (qualified or not) in the output,
+            # since downstream code looks records up by that exact key.
+            bare_to_key = {key.rsplit(".", 1)[-1]: key for key in selection_results}
             column_names = [desc[0] for desc in (self.__cursor.description or ())]
             result = []
             for record in self.__cursor:
-                # Use cursor metadata so SQL aliases define the output mapping.
-                row = {
-                    col: value
-                    for col, value in zip(column_names, record)
-                    if col in selected_columns
-                }
+                row = {}
+                for col, value in zip(column_names, record):
+                    key = bare_to_key.get(col)
+                    if key is not None:
+                        row[key] = value
                 result.append(row)
 
             return result
