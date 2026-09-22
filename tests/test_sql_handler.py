@@ -593,7 +593,7 @@ class TestSQLHandler:
             subselect_sql_generator.sql
             == "SELECT invoice_id, invoice_line_id, quantity, track_id, unit_price "
             + "FROM invoice_line "
-            + "WHERE invoice_id IN ( SELECT invoice_id FROM invoice AS i WHERE i.billing_state = %(i_billing_state)s )"
+            + "WHERE invoice_id IN ( SELECT i.invoice_id FROM invoice AS i WHERE i.billing_state = %(i_billing_state)s )"
         )
 
         select_map = subselect_sql_generator.selection_results
