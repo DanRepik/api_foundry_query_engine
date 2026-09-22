@@ -1,4 +1,8 @@
-from api_foundry_query_engine.connectors.connection import Connection, Cursor
+from api_foundry_query_engine.connectors.connection import (
+    Connection,
+    Cursor,
+    map_columns_to_selection_keys,
+)
 from api_foundry_query_engine.utils.logger import logger
 
 # Initialize the logger
@@ -32,16 +36,16 @@ class PostgresCursor(Cursor):
         try:
             # Execute the SQL statement with parameters
             self.__cursor.execute(sql, params)
-            selected_columns = set(selection_results)
+            # cursor.description always returns bare column names, even
+            # when selection_results' keys are table-alias-qualified (e.g.
+            # "m.media_type_id"). Match on the bare name but keep
+            # selection_results' own key (qualified or not) in the output,
+            # since downstream code looks records up by that exact key.
             column_names = [desc[0] for desc in (self.__cursor.description or ())]
+            position_keys = map_columns_to_selection_keys(column_names, selection_results)
             result = []
             for record in self.__cursor:
-                # Use cursor metadata so SQL aliases define the output mapping.
-                row = {
-                    col: value
-                    for col, value in zip(column_names, record)
-                    if col in selected_columns
-                }
+                row = {key: value for key, value in zip(position_keys, record) if key is not None}
                 result.append(row)
 
             return result
