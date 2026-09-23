@@ -39,32 +39,32 @@ class TestDataApiPlaceholders:
         ],
     )
     def test_data_api_casts_typed_columns(self, column_type, expected_cast):
-        handler = _handler("postgres-data-api")
+        handler = _handler("postgres:data-api")
         prop = _property("occurred_at", column_type=column_type)
         assert handler.placeholder(prop) == f":occurred_at::{expected_cast}"
 
     def test_data_api_leaves_plain_string_column_uncast(self):
-        handler = _handler("postgres-data-api")
+        handler = _handler("postgres:data-api")
         prop = _property("name", column_type="string")
         assert handler.placeholder(prop) == ":name"
 
     def test_data_api_leaves_numeric_and_boolean_columns_uncast(self):
-        handler = _handler("postgres-data-api")
+        handler = _handler("postgres:data-api")
         assert handler.placeholder(_property("count", column_type="integer")) == ":count"
         assert handler.placeholder(_property("active", column_type="boolean")) == ":active"
         assert handler.placeholder(_property("price", column_type="numeric")) == ":price"
 
     def test_data_api_casts_embedded_object_to_jsonb_regardless_of_column_type(self):
-        handler = _handler("postgres-data-api")
+        handler = _handler("postgres:data-api")
         prop = _property("metadata", column_type="string", api_type="object")
         assert handler.placeholder(prop) == ":metadata::jsonb"
 
     def test_data_api_casts_embedded_array_to_jsonb(self):
-        handler = _handler("postgres-data-api")
+        handler = _handler("postgres:data-api")
         prop = _property("tags", column_type=None, api_type="array")
         assert handler.placeholder(prop) == ":tags::jsonb"
 
     def test_data_api_custom_param_name_used_over_api_name(self):
-        handler = _handler("postgres-data-api")
+        handler = _handler("postgres:data-api")
         prop = _property("id", column_type="uuid")
         assert handler.placeholder(prop, "id_0") == ":id_0::uuid"

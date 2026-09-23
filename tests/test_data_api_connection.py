@@ -27,7 +27,7 @@ DATABASE = "cep"
 def _connection() -> DataApiConnection:
     return DataApiConnection(
         {
-            "engine": "postgres-data-api",
+            "engine": "postgres:data-api",
             "resource_arn": RESOURCE_ARN,
             "secret_arn": SECRET_ARN,
             "database": DATABASE,

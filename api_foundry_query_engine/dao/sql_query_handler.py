@@ -4,6 +4,7 @@ import uuid
 from typing import Optional, List, Dict
 from datetime import datetime, date
 
+from api_foundry_query_engine.connectors.connection import parse_engine
 from api_foundry_query_engine.utils.app_exception import ApplicationException
 from api_foundry_query_engine.operation import Operation
 from api_foundry_query_engine.utils.api_model import SchemaObject, SchemaObjectProperty
@@ -130,10 +131,13 @@ DATA_API_COLUMN_CASTS = {
 class SQLQueryHandler:
     operation: Operation
     engine: str
+    dialect: str
+    driver: str
 
     def __init__(self, operation: Operation, engine: str):  # , schema_object: SchemaObject):
         self.operation = operation
         self.engine = engine
+        self.dialect, self.driver = parse_engine(engine)
         self.__select_list_columns = None
 
     @property
@@ -173,7 +177,7 @@ class SQLQueryHandler:
         if len(param) == 0:
             param = property.api_name if property.api_name is not None else ""
 
-        if self.engine == "oracle":
+        if self.dialect == "oracle":
             if property.column_type == "date":
                 return f"TO_DATE(:{param}, 'YYYY-MM-DD')"
             elif property.column_type == "datetime":
@@ -181,7 +185,7 @@ class SQLQueryHandler:
             elif property.column_type == "time":
                 return f"TO_TIME(:{param}, 'HH24:MI:SS.FF')"
             return f":{param}"
-        if self.engine == "postgres-data-api":
+        if self.driver == "data-api":
             # JSON-serialized properties (embedded objects/arrays, see
             # SQLInsertSchemaQueryHandler.insert_values) always need a
             # jsonb cast regardless of the declared column_type, since
@@ -786,9 +790,9 @@ class SQLSchemaQueryHandler(SQLQueryHandler):
         elif property.api_type == "integer":
             return f"{property.column_name} + 1"
         elif property.api_type in ["string", "uuid"]:
-            if self.engine == "oracle":
+            if self.dialect == "oracle":
                 return "SYS_GUID()"
-            if self.engine == "mysql":
+            if self.dialect == "mysql":
                 return "UUID()"
             return "gen_random_uuid()"
         raise ApplicationException(
