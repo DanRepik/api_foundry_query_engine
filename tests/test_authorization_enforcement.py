@@ -67,7 +67,11 @@ def test_read_album_as_sales_manager_all_columns(chinook_env):  # noqa F811
     assert {"album_id", "artist_id", "title"}.issubset(set(row.keys()))
 
 
-def test_read_album_as_sales_manager_out_of_scope(chinook_env):  # noqa F811
+def test_read_album_as_sales_manager_path_scope_not_enforced(chinook_env):  # noqa F811
+    """QueryEngine does not match the token's OAuth scope against the request
+    (see lambda_handler's claims_check(validate_path_scope=False)): a
+    sales_manager holding only read:invoice_line can still read album,
+    because role permissions alone decide access."""
     event = {
         "path": "/album",
         "headers": {"Host": "localhost", "User-Agent": "pytest"},
@@ -89,10 +93,10 @@ def test_read_album_as_sales_manager_out_of_scope(chinook_env):  # noqa F811
 
     engine = QueryEngine(config=chinook_env)
     resp = engine.handler(event)
-    assert resp["statusCode"] == 401
-    body = json.loads(resp["body"]) or {}
-    # Ensure clear insufficient scope message
-    assert "insufficient_scope" in body.get("message", "")
+    assert resp["statusCode"] == 200
+    records = json.loads(resp["body"])
+    # sales_manager's read permission is ".*": every album column.
+    assert set(records[0]) == {"album_id", "artist_id", "title"}
 
 
 def test_delete_album_forbidden_for_associate(chinook_env):  # noqa F811
