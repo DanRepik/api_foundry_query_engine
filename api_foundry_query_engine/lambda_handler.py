@@ -13,21 +13,54 @@ logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
 log = logging.getLogger(__name__)
 
 
+# Lambda rejects synchronous responses over 6 MB (6,291,556 bytes including
+# its own envelope); API Gateway then surfaces that as an opaque
+# "502 Internal server error". The margin leaves room for the statusCode/
+# headers wrapper so a body under the limit can't still be refused.
+DEFAULT_MAX_RESPONSE_BYTES = 6 * 1024 * 1024 - 4096
+
+
 class QueryEngine:
     def __init__(self, config: Mapping[str, str]):
         self.adapter = GatewayAdapter(config)
+        self.max_response_bytes = int(
+            config.get("MAX_RESPONSE_BYTES") or DEFAULT_MAX_RESPONSE_BYTES
+        )
 
     def handler(self, event) -> dict[str, Any]:
         log.debug("event: %s", event)
         try:
             response = self.adapter.process_event(event)
+            body = json.dumps(response)
+
+            # json.dumps escapes to ASCII by default, so len(body) is bytes.
+            if len(body) > self.max_response_bytes:
+                log.error(
+                    "response of %d bytes exceeds limit of %d bytes",
+                    len(body),
+                    self.max_response_bytes,
+                )
+                return {
+                    "isBase64Encoded": False,
+                    "statusCode": 502,
+                    "headers": {"Content-Type": "application/json"},
+                    "body": json.dumps(
+                        {
+                            "message": (
+                                f"response of {len(body)} bytes exceeds the "
+                                f"maximum of {self.max_response_bytes} bytes; "
+                                "narrow the request with filters"
+                            )
+                        }
+                    ),
+                }
 
             # Ensure the response conforms to API Gateway requirements
             return {
                 "isBase64Encoded": False,
                 "statusCode": 200,
                 "headers": {"Content-Type": "application/json"},
-                "body": json.dumps(response),
+                "body": body,
             }
         except ApplicationException as e:
             log.error("exception: %s", e, exc_info=True)
