@@ -117,7 +117,7 @@ def test_delete_album_forbidden_for_associate(chinook_env):  # noqa F811
 
     engine = QueryEngine(config=chinook_env)
     resp = engine.handler(event)
-    assert resp["statusCode"] == 402
+    assert resp["statusCode"] == 403
     body = json.loads(resp["body"]) or {}
     assert "Subject is not allowed to delete album" in body.get("message", "")
 
@@ -212,7 +212,7 @@ def test_create_album_as_sales_associate_forbidden(chinook_env):  # noqa F811
 
     engine = QueryEngine(config=chinook_env)
     resp = engine.handler(event)
-    assert resp["statusCode"] == 402
+    assert resp["statusCode"] == 403
     body = json.loads(resp["body"]) or {}
     assert "Subject is not allowed to create with property: artist_id" in body.get(
         "message", ""
@@ -276,7 +276,7 @@ def test_update_album_as_sales_associate_forbidden(chinook_env):  # noqa F811
 
     engine = QueryEngine(config=chinook_env)
     resp = engine.handler(event)
-    assert resp["statusCode"] == 402
+    assert resp["statusCode"] == 403
     body = json.loads(resp["body"]) or {}
     assert (
         "Subject does not have permission to update properties: ['title']"
@@ -337,7 +337,7 @@ def test_delete_album_with_global_wildcard_scope_but_role_denied(
 
     engine = QueryEngine(config=chinook_env)
     resp = engine.handler(event)
-    assert resp["statusCode"] == 402
+    assert resp["statusCode"] == 403
     body = json.loads(resp["body"]) or {}
     assert "Subject is not allowed to delete album" in body.get("message", "")
 
@@ -396,7 +396,7 @@ def test_create_album_with_global_wildcard_scope_role_denied(
 
     engine = QueryEngine(config=chinook_env)
     resp = engine.handler(event)
-    assert resp["statusCode"] == 402
+    assert resp["statusCode"] == 403
     body = json.loads(resp["body"]) or {}
     assert "Subject is not allowed to create with property: artist_id" in body.get(
         "message", ""
@@ -665,7 +665,7 @@ def test_update_album_with_permissions_claim_associate_still_denied(
     }
     engine = QueryEngine(config=chinook_env)
     resp = engine.handler(event)
-    assert resp["statusCode"] == 402
+    assert resp["statusCode"] == 403
     body = json.loads(resp["body"]) or {}
     assert (
         "Subject does not have permission to update properties: ['title']"
