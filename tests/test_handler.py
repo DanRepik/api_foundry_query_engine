@@ -15,7 +15,13 @@ def chinook_handler(chinook_env):
     yield query_engine
 
 
-def test_handler_insufficient_scope(chinook_env):  # noqa F811
+def test_handler_does_not_enforce_path_scope(chinook_env):  # noqa F811
+    """The Lambda handler runs claims_check(validate_path_scope=False), so a
+    token's OAuth scope is not matched against the request path: role
+    permissions alone decide access. Consumers (e.g. new-america-contract)
+    issue tokens with no path scopes at all, so enforcing them would reject
+    every request. Scope enforcement itself stays covered by
+    claims_check's own tests with validate_path_scope=True."""
     log.info(f"cwd {os.path.join(os.getcwd(), 'resources/api_spec.yaml')}")
 
     os.environ["API_SPEC"] = os.path.join(os.getcwd(), "resources/api_spec.yaml")
@@ -78,8 +84,9 @@ def test_handler_insufficient_scope(chinook_env):  # noqa F811
     lambda_handler.handler.engine_config = merged_env
     response = lambda_handler.handler(event, None)
     print(f"response {response}")
-    assert response["statusCode"] == 401
-    assert "insufficient_scope: required_scope=read:artist" in response["body"]
+    # A read:album scope on a request for /artist is not rejected.
+    assert response["statusCode"] == 200
+    assert isinstance(json.loads(response["body"]), list)
 
 
 def test_handler_sufficient_scope(chinook_env):  # noqa F811

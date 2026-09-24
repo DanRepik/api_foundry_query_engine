@@ -83,25 +83,18 @@ class TestBatchOperations:
             assert result["results"]["op_2"]["status"] == "completed"
 
             # Verify invoice was created
-            invoice_id = result["results"]["op_0"]["data"][0]["invoice_id"]
+            invoice_id = result["results"]["op_0"]["data"]["invoice_id"]
             assert invoice_id is not None
 
             # Verify line items reference correct invoice
-            line_1_invoice = result["results"]["op_1"]["data"][0]["invoice_id"]
-            line_2_invoice = result["results"]["op_2"]["data"][0]["invoice_id"]
+            line_1_invoice = result["results"]["op_1"]["data"]["invoice_id"]
+            line_2_invoice = result["results"]["op_2"]["data"]["invoice_id"]
             assert line_1_invoice == invoice_id
             assert line_2_invoice == invoice_id
         finally:
             connection.close()
-        invoice_id = result["results"][0]["data"][0]["invoice_id"]
-        assert invoice_id is not None
 
-        # Verify line items reference correct invoice
-        line_1_invoice = result["results"][1]["data"][0]["invoice_id"]
-        line_2_invoice = result["results"][2]["data"][0]["invoice_id"]
-        assert line_1_invoice == invoice_id
-        assert line_2_invoice == invoice_id
-        """Test creating invoice with multiple line items in batch"""
+        # Same batch with explicit operation ids and depends_on.
         batch_request = {
             "operations": [
                 {
@@ -158,12 +151,12 @@ class TestBatchOperations:
         assert result["results"]["create_line_2"]["status"] == "completed"
 
         # Verify invoice was created
-        invoice_id = result["results"]["create_invoice"]["data"][0]["invoice_id"]
+        invoice_id = result["results"]["create_invoice"]["data"]["invoice_id"]
         assert invoice_id is not None
 
         # Verify line items reference correct invoice
-        line_1_invoice = result["results"]["create_line_1"]["data"][0]["invoice_id"]
-        line_2_invoice = result["results"]["create_line_2"]["data"][0]["invoice_id"]
+        line_1_invoice = result["results"]["create_line_1"]["data"]["invoice_id"]
+        line_2_invoice = result["results"]["create_line_2"]["data"]["invoice_id"]
         assert line_1_invoice == invoice_id
         assert line_2_invoice == invoice_id
 
@@ -203,8 +196,8 @@ class TestBatchOperations:
         assert result["results"]["create_invoice"]["status"] == "completed"
 
         # Verify customer_id was correctly referenced
-        customer_id = result["results"]["read_customer"]["data"][0]["customer_id"]
-        invoice_customer_id = result["results"]["create_invoice"]["data"][0][
+        customer_id = result["results"]["read_customer"]["data"]["customer_id"]
+        invoice_customer_id = result["results"]["create_invoice"]["data"][
             "customer_id"
         ]
         assert invoice_customer_id == customer_id
@@ -407,5 +400,5 @@ class TestBatchOperations:
         result = handler.execute()
 
         assert result["success"] is True
-        assert result["results"]["create_media"]["data"][0]["name"] == ("Original Name")
-        assert result["results"]["update_media"]["data"][0]["name"] == ("Updated Name")
+        assert result["results"]["create_media"]["data"]["name"] == ("Original Name")
+        assert result["results"]["update_media"]["data"]["name"] == ("Updated Name")
