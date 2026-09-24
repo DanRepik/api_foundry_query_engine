@@ -453,7 +453,7 @@ def test_concise_format_permissions(chinook_env):
             query_params={"album_id": "1"},
             claims={"roles": ["sales_associate"]},
         ),
-        "postgresql",
+        "postgres",
     )
     # sales_associate has read: "album_id|title" (concise format)
     assert "a.album_id" in operation_dao.query_handler.selection_results
@@ -470,7 +470,7 @@ def test_concise_format_permissions(chinook_env):
             store_params={"year_released": 2023},
             claims={"roles": ["sales_associate"]},
         ),
-        "postgresql",
+        "postgres",
     )
     # sales_associate has write: "year_released" (concise format)
     # The returning clause uses read permissions: "album_id|title"
@@ -488,7 +488,7 @@ def test_concise_format_permissions(chinook_env):
             query_params={"album_id": "1"},
             claims={"roles": ["sales_manager"]},
         ),
-        "postgresql",
+        "postgres",
     )
     # sales_manager has read: ".*" (concise format allowing all)
     assert "a.album_id" in operation_dao.query_handler.selection_results

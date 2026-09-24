@@ -1,12 +1,35 @@
-from typing import Mapping
+from typing import Callable, Mapping, Tuple, Type
 import boto3
 import json
 
-from api_foundry_query_engine.connectors.connection import Connection
+from api_foundry_query_engine.connectors.connection import Connection, parse_engine
 from api_foundry_query_engine.utils.app_exception import ApplicationException
 from api_foundry_query_engine.utils.logger import logger
 
 log = logger(__name__)
+
+
+def _load_postgres_connection() -> Type[Connection]:
+    from api_foundry_query_engine.connectors.postgres_connection import PostgresConnection
+
+    return PostgresConnection
+
+
+def _load_data_api_connection() -> Type[Connection]:
+    from api_foundry_query_engine.connectors.data_api_connection import DataApiConnection
+
+    return DataApiConnection
+
+
+# (dialect, driver) -> a loader returning the Connection subclass to
+# instantiate. A function rather than the class itself so each connector's
+# module (and its own dependencies, e.g. psycopg2) is only imported once a
+# config value actually selects it. Add new dialect/driver combinations
+# here rather than growing an if/elif chain.
+CONNECTOR_REGISTRY: dict[Tuple[str, str], Callable[[], Type[Connection]]] = {
+    ("postgres", "psycopg2"): _load_postgres_connection,
+    ("postgres", "data-api"): _load_data_api_connection,
+}
 
 
 class ConnectionFactory:
@@ -45,7 +68,7 @@ class ConnectionFactory:
             data_api_cluster_arn = self.config.get(f"{database.upper()}_DATA_API_CLUSTER_ARN")
             if data_api_cluster_arn:
                 db_config = {
-                    "engine": "postgres-data-api",
+                    "engine": "postgres:data-api",
                     "resource_arn": data_api_cluster_arn,
                     "secret_arn": self.config.get(f"{database.upper()}_DATA_API_SECRET_ARN"),
                     "database": self.config.get(f"{database.upper()}_DATA_API_DATABASE"),
@@ -83,19 +106,14 @@ class ConnectionFactory:
         if not engine:
             raise ApplicationException(500, "Database 'engine' is not defined in the secret.")
 
-        if engine == "postgres":
-            from .postgres_connection import PostgresConnection
-
-            return PostgresConnection(db_config)
-
-        if engine == "postgres-data-api":
-            from .data_api_connection import DataApiConnection
-
-            return DataApiConnection(db_config)
-
-        # Add support for other engines here if needed in the future
-
-        raise ValueError(f"Unsupported database engine: {engine}")
+        dialect, driver = parse_engine(engine)
+        loader = CONNECTOR_REGISTRY.get((dialect, driver))
+        if loader is None:
+            raise ValueError(
+                f"Unsupported database engine: {engine!r} (dialect={dialect!r}, driver={driver!r}). "
+                f"Registered: {sorted(CONNECTOR_REGISTRY.keys())}"
+            )
+        return loader()(db_config)
 
     def __get_secret(self, db_secret_name: str):
         """

@@ -1,5 +1,6 @@
+import os
 from collections import defaultdict, deque
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from api_foundry_query_engine.utils.logger import logger
 
@@ -7,6 +8,55 @@ from api_foundry_query_engine.utils.logger import logger
 log = logger(__name__)
 
 db_config_map = dict()
+
+# The driver a bare "engine" value (no ":driver" suffix) resolves to for
+# each dialect, when nothing else overrides it. This only names a driver --
+# it doesn't guarantee one is actually registered in ConnectionFactory's
+# CONNECTOR_REGISTRY yet (oracle/mysql have neither a real connector nor
+# tests exercising one, only dialect-specific SQL generation in
+# SQLQueryHandler.placeholder/concurrency_generator). Using ConnectionFactory
+# with such a dialect fails there instead, with a clear "unsupported
+# engine" error rather than a "no default driver" one.
+DEFAULT_DRIVERS = {
+    "postgres": "psycopg2",
+    "oracle": "cx_oracle",
+    "mysql": "mysqlclient",
+}
+
+
+def parse_engine(engine: str) -> Tuple[str, str]:
+    """Split an `engine` config value into (dialect, driver).
+
+    `engine` was originally meant to select a SQL dialect ("postgres",
+    "oracle", "mysql") for dialect-specific SQL generation (see
+    SQLQueryHandler.placeholder/concurrency_generator). Once a second
+    connector (the RDS Data API) existed for the same dialect, driver
+    selection got bolted onto the same string as a distinct value
+    ("postgres-data-api") instead of an orthogonal axis -- indistinguishable
+    from a dialect at a glance, and unable to express e.g. an Oracle Data
+    API-style driver without inventing another one-off name.
+
+    The explicit form is "{dialect}:{driver}", e.g. "postgres:data-api".
+    A bare dialect ("postgres") resolves its driver from the
+    "{DIALECT}_DEFAULT_DRIVER" environment variable if set, else
+    DEFAULT_DRIVERS -- so existing config/tests that only ever named a
+    dialect keep working, and a deployment can switch its default driver
+    (e.g. postgres -> data-api) without touching every config value that
+    names the dialect alone.
+    """
+    if ":" in engine:
+        dialect, driver = engine.split(":", 1)
+        return dialect, driver
+
+    dialect = engine
+    driver = os.environ.get(f"{dialect.upper()}_DEFAULT_DRIVER") or DEFAULT_DRIVERS.get(dialect)
+    if not driver:
+        raise ValueError(
+            f"No default driver configured for dialect {dialect!r} -- set "
+            f"{dialect.upper()}_DEFAULT_DRIVER or add it to DEFAULT_DRIVERS, "
+            f"or specify one explicitly as \"{dialect}:<driver>\"."
+        )
+    return dialect, driver
 
 
 def map_columns_to_selection_keys(column_names: List[str], selection_results: dict) -> List[Optional[str]]:

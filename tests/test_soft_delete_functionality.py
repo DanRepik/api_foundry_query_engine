@@ -138,7 +138,7 @@ class TestSoftDeleteFunctionality:
             entity="contracts", action="read", query_params={"id": "test-id"}
         )
 
-        handler = SQLSelectSchemaQueryHandler(operation, schema, "postgresql")
+        handler = SQLSelectSchemaQueryHandler(operation, schema, "postgres")
 
         # Check that soft delete filter is applied in generated SQL
         sql = handler.sql
@@ -164,7 +164,7 @@ class TestSoftDeleteFunctionality:
         )
 
         handler_active = SQLSelectSchemaQueryHandler(
-            operation_active, schema_active, "postgresql"
+            operation_active, schema_active, "postgres"
         )
 
         sql_active = handler_active.sql
@@ -205,7 +205,7 @@ class TestSoftDeleteFunctionality:
             claims={"sub": "user-123"},
         )
 
-        handler = SQLDeleteSchemaQueryHandler(operation, schema, "postgresql")
+        handler = SQLDeleteSchemaQueryHandler(operation, schema, "postgres")
 
         # Mock the check_permission method to return True
         handler.check_permission = Mock(return_value=True)
@@ -228,7 +228,7 @@ class TestSoftDeleteFunctionality:
             entity="users", action="delete", query_params={"id": "test-id"}
         )
 
-        handler = SQLDeleteSchemaQueryHandler(operation, schema, "postgresql")
+        handler = SQLDeleteSchemaQueryHandler(operation, schema, "postgres")
         handler.check_permission = Mock(return_value=True)
 
         # Check that hard delete is performed
@@ -285,7 +285,7 @@ class TestSoftDeleteFunctionality:
             claims={"sub": "admin-123", "roles": ["admin"]},
         )
 
-        handler = SQLRestoreSchemaQueryHandler(operation, schema, "postgresql")
+        handler = SQLRestoreSchemaQueryHandler(operation, schema, "postgres")
         handler.check_permission = Mock(return_value=True)
 
         # Test SQL generation
@@ -328,7 +328,7 @@ class TestSoftDeleteFunctionality:
             claims={"roles": ["user"]},
         )
 
-        handler = SQLRestoreSchemaQueryHandler(operation, schema, "postgresql")
+        handler = SQLRestoreSchemaQueryHandler(operation, schema, "postgres")
 
         # Should deny permission for user role
         assert handler.check_permission() is False
@@ -341,7 +341,7 @@ class TestSoftDeleteFunctionality:
             claims={"roles": ["admin"]},
         )
         handler_admin = SQLRestoreSchemaQueryHandler(
-            operation_admin, schema, "postgresql"
+            operation_admin, schema, "postgres"
         )
         assert handler_admin.check_permission() is True
 
@@ -381,7 +381,7 @@ class TestSoftDeleteFunctionality:
         )
 
         delete_handler = SQLDeleteSchemaQueryHandler(
-            delete_operation, schema, "postgresql"
+            delete_operation, schema, "postgres"
         )
         delete_handler.check_permission = Mock(return_value=True)
 
@@ -398,7 +398,7 @@ class TestSoftDeleteFunctionality:
         )
 
         restore_handler = SQLRestoreSchemaQueryHandler(
-            restore_operation, schema, "postgresql"
+            restore_operation, schema, "postgres"
         )
         restore_handler.check_permission = Mock(return_value=True)
 
@@ -446,7 +446,7 @@ class TestSoftDeleteFunctionality:
         )
 
         delete_handler = SQLDeleteSchemaQueryHandler(
-            delete_operation, schema, "postgresql"
+            delete_operation, schema, "postgres"
         )
         delete_handler.check_permission = Mock(return_value=True)
 
@@ -463,7 +463,7 @@ class TestSoftDeleteFunctionality:
         )
 
         restore_handler = SQLRestoreSchemaQueryHandler(
-            restore_operation, schema, "postgresql"
+            restore_operation, schema, "postgres"
         )
         restore_handler.check_permission = Mock(return_value=True)
 
@@ -528,7 +528,7 @@ class TestSoftDeleteFunctionality:
         )
 
         select_handler = SQLSelectSchemaQueryHandler(
-            normal_operation, schema, "postgresql"
+            normal_operation, schema, "postgres"
         )
 
         sql = select_handler.sql
@@ -543,7 +543,7 @@ class TestSoftDeleteFunctionality:
         )
 
         archived_handler = SQLSelectSchemaQueryHandler(
-            archived_operation, schema, "postgresql"
+            archived_operation, schema, "postgres"
         )
 
         archived_sql = archived_handler.sql
@@ -559,7 +559,7 @@ class TestSoftDeleteFunctionality:
         )
 
         inactive_handler = SQLSelectSchemaQueryHandler(
-            inactive_operation, schema, "postgresql"
+            inactive_operation, schema, "postgres"
         )
 
         inactive_sql = inactive_handler.sql
@@ -577,7 +577,7 @@ class TestSoftDeleteFunctionality:
         )
 
         multi_handler = SQLSelectSchemaQueryHandler(
-            multi_conflict_operation, schema, "postgresql"
+            multi_conflict_operation, schema, "postgres"
         )
 
         multi_sql = multi_handler.sql

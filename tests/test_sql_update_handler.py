@@ -119,7 +119,7 @@ class TestUpdateSQLHandler:
                 store_params={"invoice_date": "2024-03-18", "total": "2.63"},
             ),
             invoice_with_datetime_version_stamp(),
-            "posgres",
+            "postgres",
         )
 
         log.info(f"sql: {sql_handler.sql}, placeholders: {sql_handler.placeholders}")
