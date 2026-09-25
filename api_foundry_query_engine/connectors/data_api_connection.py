@@ -209,8 +209,12 @@ class DataApiConnection(Connection):
     plain HTTPS request to the `rds-data` API, authenticated by IAM, with
     the database credentials looked up server-side from the secret named
     by `secret_arn`. Unlike the VPC-attached DSN-in-env-var workaround
-    this replaces, the Lambda's own environment/role never needs
-    `secretsmanager:GetSecretValue` and never sees a password.
+    this replaces, the password never reaches the Lambda's environment or
+    memory. The Data API reads the secret with the caller's own IAM
+    permissions, so the role needs `secretsmanager:GetSecretValue` on
+    `secret_arn` as well as the `rds-data` actions (ExecuteStatement,
+    BeginTransaction, CommitTransaction, RollbackTransaction) on the
+    cluster.
 
     db_config keys: `resource_arn` (the cluster ARN), `secret_arn`,
     `database`, and optionally `schema` and `endpoint_url` (LocalStack).

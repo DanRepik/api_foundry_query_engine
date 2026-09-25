@@ -68,3 +68,22 @@ class TestDataApiPlaceholders:
         handler = _handler("postgres:data-api")
         prop = _property("id", column_type="uuid")
         assert handler.placeholder(prop, "id_0") == ":id_0::uuid"
+
+
+@pytest.mark.unit
+class TestNullPlaceholders:
+    """An unset optional parameter must bind SQL NULL, not the text "None" --
+    every `:param IS NULL OR ...` optional filter on a custom-SQL route
+    depends on it. (Shipped in 0.8.82; carried onto main alongside the
+    dialect/driver split.)"""
+
+    @pytest.mark.parametrize("engine", ["postgres", "postgres:data-api"])
+    def test_none_binds_sql_null(self, engine):
+        handler = _handler(engine)
+        prop = _property("start_date", column_type="date-time", api_type="date-time")
+        assert handler.generate_placeholders(prop, None) == {"start_date": None}
+
+    def test_none_binds_sql_null_with_prefix(self):
+        handler = _handler("postgres")
+        prop = _property("name")
+        assert handler.generate_placeholders(prop, None, prefix="a") == {"a_name": None}

@@ -414,6 +414,15 @@ class SQLQueryHandler:
         return sql
 
     def generate_placeholders(self, property: SchemaObjectProperty, value, prefix: Optional[str] = None) -> dict:
+        placeholder_name = f"{prefix}_{property.api_name}" if prefix else property.api_name
+        if value is None:
+            # An unset optional query parameter must bind an actual SQL
+            # NULL, not the string "None" -- str(None) below would
+            # otherwise produce a literal 'None' value, silently
+            # breaking every `:param IS NULL OR ...`-style optional
+            # filter (e.g. date-range parameters on a custom SQL route).
+            return {placeholder_name: None}
+
         operand = "="
 
         if isinstance(value, str):
@@ -425,7 +434,6 @@ class SQLQueryHandler:
         else:
             value_str = str(value)
 
-        placeholder_name = f"{prefix}_{property.api_name}" if prefix else property.api_name
         placeholders = {}
 
         if operand in ["between", "not-between"]:

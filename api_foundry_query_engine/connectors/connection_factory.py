@@ -59,12 +59,13 @@ class ConnectionFactory:
         db_config = self.db_config_map.get(database)
         if not db_config:
             # A <DATABASE>_DATA_API_CLUSTER_ARN config value selects the
-            # RDS Data API connector and, like the DSN branch below, skips
-            # Secrets Manager entirely -- the Data API looks up the
-            # credentials server-side from secret_arn, so this Lambda
-            # never needs secretsmanager:GetSecretValue or a password in
-            # its own environment at all (not even to work around VPC
-            # egress, since a Data API Lambda isn't VPC-attached).
+            # RDS Data API connector and, like the DSN branch below, never
+            # fetches the secret itself -- the Data API resolves the
+            # credentials server-side from secret_arn, so no password is
+            # ever in this Lambda's environment or memory. The Data API
+            # does that lookup with the *caller's* IAM permissions, though,
+            # so the role still needs secretsmanager:GetSecretValue on
+            # secret_arn alongside the rds-data:* actions.
             data_api_cluster_arn = self.config.get(f"{database.upper()}_DATA_API_CLUSTER_ARN")
             if data_api_cluster_arn:
                 db_config = {
