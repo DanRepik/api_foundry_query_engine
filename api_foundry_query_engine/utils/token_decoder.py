@@ -43,6 +43,27 @@ def _log_jwt_configuration():
     log.debug("===============================")
 
 
+# Headers never written to the log, even at DEBUG: bearer tokens, session
+# cookies and API keys are credentials, not diagnostics.
+_REDACTED_HEADERS = frozenset({"authorization", "cookie", "x-api-key"})
+
+
+def _redacted_event(event: Dict[str, Any]) -> Dict[str, Any]:
+    """A copy of `event` safe to log: credential headers masked in both
+    `headers` and `multiValueHeaders`, matched case-insensitively."""
+    if not isinstance(event, dict):
+        return event
+    redacted = dict(event)
+    for key in ("headers", "multiValueHeaders"):
+        headers = event.get(key)
+        if isinstance(headers, dict):
+            redacted[key] = {
+                name: ("[REDACTED]" if str(name).lower() in _REDACTED_HEADERS else value)
+                for name, value in headers.items()
+            }
+    return redacted
+
+
 class LambdaTokenValidator:
     """Validates tokens by invoking an AWS Lambda TOKEN authorizer."""
 
@@ -265,7 +286,8 @@ def token_decoder(
             if log.isEnabledFor(logging.DEBUG):
                 _log_jwt_configuration()
 
-            log.debug("Event structure: %s", json.dumps(event, default=str))
+            if log.isEnabledFor(logging.DEBUG):
+                log.debug("Event structure: %s", json.dumps(_redacted_event(event), default=str))
 
             # Check if authorizer already exists (gateway validated)
             if event.get("requestContext", {}).get("authorizer"):
