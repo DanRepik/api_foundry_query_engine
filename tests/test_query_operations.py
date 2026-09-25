@@ -9,6 +9,17 @@ from api_foundry_query_engine.services.transactional_service import Transactiona
 log = logger(__name__)
 
 
+def _media_type_row_count(chinook_env) -> int:
+    # Other tests in the session insert media types into the shared Chinook
+    # database, so the expected count is read from the table itself rather
+    # than hard-coded to the seed data's 5 -- the assertion is that the
+    # engine returns every row, whatever the table holds.
+    import psycopg2
+
+    with psycopg2.connect(chinook_env["chinook_secret"]["dsn"]) as conn, conn.cursor() as cur:
+        cur.execute("SELECT COUNT(*) FROM media_type")
+        return cur.fetchone()[0]
+
 @pytest.mark.integration
 class TestQueryOperations:
     def test_select_all(self, chinook_env):  # noqa F811
@@ -16,7 +27,7 @@ class TestQueryOperations:
             Operation(entity="media_type", action="read")
         )
         log.debug(f"len: {len(result)}")
-        assert len(result) == 5
+        assert len(result) == _media_type_row_count(chinook_env)
 
     def test_select_one(self, chinook_env):  # noqa F811
         result = TransactionalService(chinook_env).execute(

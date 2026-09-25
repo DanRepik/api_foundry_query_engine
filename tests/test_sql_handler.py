@@ -117,6 +117,7 @@ class TestSQLHandler:
 
     @pytest.mark.unit
     def test_search_invalid_property(self):
+        load_api(os.path.join(os.getcwd(), "resources/api_spec.yaml"))
         try:
             operation_dao = OperationDAO(
                 Operation(

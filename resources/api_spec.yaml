@@ -103,7 +103,7 @@ path_operations:
                 column_type: integer
                 required: false
                 type: integer
-        sql: "SELECT\n    a.album_id,\n    a.title,\n    COUNT(il.invoice_line_id)\n\
+        sql: "SELECT\n    a.album_id,\n    a.title AS album_title,\n    COUNT(il.invoice_line_id) AS total_sold\n\
             FROM\n    invoice_line il\nJOIN invoice i ON\n    il.invoice_id = i.invoice_id\n\
             JOIN\n    track t ON il.track_id = t.track_id\nJOIN\n    album a ON t.album_id\
             \ = a.album_id\nWHERE\n    i.invoice_date >= :start\n    AND i.invoice_date\
