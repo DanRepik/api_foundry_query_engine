@@ -1,14 +1,36 @@
 import logging
 import os
 
-# Configuring the logging module with basic settings, including format and log level,
-# where the log level is obtained from the environment variable LOGGING_LEVEL
-# with a default of DEBUG, and force=True to ensure the configuration is applied immediately.
+# The root log level comes from LOGGING_LEVEL, defaulting to INFO. force=True
+# so the configuration applies even when the Lambda runtime has already
+# installed a handler.
+DEFAULT_LOGGING_LEVEL = "INFO"
+
+# At DEBUG, botocore logs every request it signs: the headers, including the
+# caller's x-amz-security-token, and the body -- which for the RDS Data API
+# carries every SQL parameter. These loggers are therefore held at WARNING
+# whatever LOGGING_LEVEL is, unless AWS_SDK_LOGGING_LEVEL explicitly says
+# otherwise.
+AWS_SDK_LOGGERS = ("boto3", "botocore", "s3transfer", "urllib3")
+DEFAULT_AWS_SDK_LOGGING_LEVEL = "WARNING"
+
+
+def _logging_level() -> str:
+    return os.getenv("LOGGING_LEVEL", DEFAULT_LOGGING_LEVEL).upper()
+
+
+def _quiet_aws_sdk_loggers() -> None:
+    level = os.getenv("AWS_SDK_LOGGING_LEVEL", DEFAULT_AWS_SDK_LOGGING_LEVEL).upper()
+    for name in AWS_SDK_LOGGERS:
+        logging.getLogger(name).setLevel(level)
+
+
 logging.basicConfig(
     format="%(name)s:%(lineno)s - %(levelname)s - %(message)s",
-    level=os.getenv("LOGGING_LEVEL", "DEBUG").upper(),
+    level=_logging_level(),
     force=True,
 )
+_quiet_aws_sdk_loggers()
 
 WARN = logging.WARN
 INFO = logging.INFO
@@ -26,14 +48,9 @@ def logger(name=None):
         logging.Logger: Logger object with the specified name or the root logger.
 
     """
-    # Retrieving the logging level from the environment variable LOGGING_LEVEL
-    # with a default of DEBUG, and converting it to uppercase
-    loggingLevel = os.getenv("LOGGING_LEVEL", "DEBUG").upper()
-
-    # Setting the logging level for the root logger to the obtained logging level
-    logging.getLogger().setLevel(loggingLevel)
-
-    # Returning a logger object with the specified name or the root logger
+    # Re-applied on every call: LOGGING_LEVEL may have changed since import.
+    logging.getLogger().setLevel(_logging_level())
+    _quiet_aws_sdk_loggers()
     return logging.getLogger(name)
 
 
