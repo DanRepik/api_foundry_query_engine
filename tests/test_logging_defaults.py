@@ -95,3 +95,38 @@ def test_token_decoder_debug_event_dump_never_contains_the_bearer_token(monkeypa
     assert dumps, "expected the DEBUG event dump to run"
     assert all("secret-jwt" not in message for message in dumps)
     assert json.loads(dumps[0].split(": ", 1)[1])["headers"]["Authorization"] == "[REDACTED]"
+
+
+@pytest.mark.unit
+def test_engine_config_load_logs_names_not_values(monkeypatch, caplog):
+    """The handler used to log os.environ whole at INFO on every cold start:
+    the execution role's AWS credentials and any DSN with its password."""
+    from api_foundry_query_engine import lambda_handler
+
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "not-a-real-secret-key")
+    monkeypatch.setenv("CEP_DB_DSN", "postgresql://app:not-a-real-password@db.example/app")
+
+    with caplog.at_level(logging.DEBUG):
+        config = lambda_handler.load_engine_config()
+
+    assert config["AWS_SECRET_ACCESS_KEY"] == "not-a-real-secret-key"
+    assert "AWS_SECRET_ACCESS_KEY" in caplog.text
+    assert "not-a-real-secret-key" not in caplog.text
+    assert "not-a-real-password" not in caplog.text
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "dsn, expected",
+    [
+        ("postgresql://app:s3cr%40t@db.example:5432/app", "postgresql://app:***@db.example:5432/app"),
+        ("postgres://app@db.example/app", "postgres://app@db.example/app"),
+        ("host=db.example user=app password=s3cret dbname=app", "host=db.example user=app password=*** dbname=app"),
+        ("host=db.example password='with space' dbname=app", "host=db.example password=*** dbname=app"),
+        ("host=db.example PASSWORD = s3cret", "host=db.example PASSWORD = ***"),
+    ],
+)
+def test_redact_dsn(dsn, expected):
+    from api_foundry_query_engine.connectors.postgres_connection import redact_dsn
+
+    assert redact_dsn(dsn) == expected

@@ -1,5 +1,5 @@
 import traceback
-from typing import Mapping
+from typing import Mapping, Optional
 
 from api_foundry_query_engine.utils.logger import logger
 from api_foundry_query_engine.utils.app_exception import ApplicationException
@@ -22,17 +22,12 @@ class TransactionalService(ServiceAdapter):
         self.connection_factory = ConnectionFactory(config)
 
     def execute(self, operation: Operation) -> list[dict]:
-        path_operation = get_path_operation(operation.entity, operation.action)
-        if path_operation:
-            database = path_operation.database
+        if operation.entity == "batch" and operation.action == "create":
+            database = self._batch_database(operation)
         else:
-            schema_object = get_schema_object(operation.entity)
-            if schema_object:
-                database = schema_object.database
-            else:
-                raise ApplicationException(
-                    500, f"Unknown operation: {operation.entity}"
-                )
+            database = self._database(operation.entity, operation.action)
+            if database is None:
+                raise ApplicationException(500, f"Unknown operation: {operation.entity}")
 
         # Pass config to connection_factory if needed (future extension)
         connection = self.connection_factory.get_connection(database)
@@ -50,3 +45,37 @@ class TransactionalService(ServiceAdapter):
             raise error
         finally:
             connection.close()
+
+    @staticmethod
+    def _database(entity, action) -> Optional[str]:
+        path_operation = get_path_operation(entity, action)
+        if path_operation:
+            return path_operation.database
+        schema_object = get_schema_object(entity)
+        if schema_object:
+            return schema_object.database
+        return None
+
+    def _batch_database(self, operation: Operation) -> str:
+        """The database a batch runs against.
+
+        "batch" is not an entity in the API model, so the database comes
+        from the sub-operations. They share one connection, so they must all
+        resolve to the same database. A sub-operation naming an unknown
+        entity doesn't pick the database; it fails on its own inside the
+        batch, where continueOnError decides what happens next.
+        """
+        operations = (operation.store_params or {}).get("operations")
+        if not isinstance(operations, list) or not operations:
+            raise ApplicationException(400, "Batch request must contain at least one operation")
+
+        databases = {self._database(op.get("entity"), op.get("action")) for op in operations if isinstance(op, dict)}
+        databases.discard(None)
+        if not databases:
+            raise ApplicationException(500, "Unknown operation: no batch operation names a known entity")
+        if len(databases) > 1:
+            raise ApplicationException(
+                400,
+                "Batch operations must all use the same database; got " + ", ".join(sorted(databases)),
+            )
+        return databases.pop()

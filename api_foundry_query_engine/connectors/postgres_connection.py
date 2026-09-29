@@ -1,3 +1,5 @@
+import re
+
 from api_foundry_query_engine.connectors.connection import (
     Connection,
     Cursor,
@@ -7,6 +9,16 @@ from api_foundry_query_engine.utils.logger import logger
 
 # Initialize the logger
 log = logger(__name__)
+
+# postgresql://user:secret@host/db  and  "... password=secret ..."
+_URI_PASSWORD = re.compile(r"(://[^:/@\s]*:)[^@\s]*(@)")
+_KEYWORD_PASSWORD = re.compile(r"(\bpassword\s*=\s*)('(?:[^'\\]|\\.)*'|\S+)", re.IGNORECASE)
+
+
+def redact_dsn(dsn: str) -> str:
+    """The DSN with its password replaced, so it can be logged."""
+    dsn = _URI_PASSWORD.sub(r"\1***\2", dsn)
+    return _KEYWORD_PASSWORD.sub(r"\1***", dsn)
 
 
 class PostgresCursor(Cursor):
@@ -121,7 +133,7 @@ class PostgresConnection(Connection):
 
         # If DSN is provided, use it directly (simplifies fixture_foundry integration)
         if "dsn" in self.db_config:
-            log.info("Connecting using DSN: %s", self.db_config["dsn"])
+            log.info("Connecting using DSN: %s", redact_dsn(self.db_config["dsn"]))
             return connect(self.db_config["dsn"])
 
         # Otherwise, build connection from individual parameters
