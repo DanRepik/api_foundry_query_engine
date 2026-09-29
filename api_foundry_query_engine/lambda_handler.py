@@ -80,13 +80,21 @@ class QueryEngine:
             }
 
 
+def load_engine_config():
+    log.info("Loading engine config from environment variables")
+    config = os.environ
+    # Names only: the Lambda environment holds the execution role's
+    # credentials (AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN) and often
+    # database DSNs with passwords.
+    log.debug("engine_config keys: %s", sorted(config))
+    return config
+
+
 @token_decoder()
 @claims_check(validate_path_scope=False, validate_scope_format=False)
 def handler(event, _):
     if not hasattr(handler, "engine_config"):
-        log.info("Loading engine config from environment variables")
-        handler.engine_config = os.environ
-        log.info("engine_config: %s", handler.engine_config)
+        handler.engine_config = load_engine_config()
 
     if not hasattr(handler, "query_engine"):
         set_api_model(handler.engine_config)
