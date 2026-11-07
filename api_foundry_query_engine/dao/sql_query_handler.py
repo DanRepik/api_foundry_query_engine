@@ -185,6 +185,21 @@ class SQLQueryHandler:
             elif property.column_type == "time":
                 return f"TO_TIME(:{param}, 'HH24:MI:SS.FF')"
             return f":{param}"
+        element_type = getattr(property, "array_element_type", None)
+        if element_type and self.dialect == "postgres":
+            # A Postgres array column (x-af-column-type "text[]" and the
+            # like). The Data API can't bind an array parameter, so the
+            # value travels as JSON text (data_api_connection dumps a
+            # list) and is unpacked into an array of the column's element
+            # type; NULL stays NULL and [] becomes an empty array.
+            # psycopg2 adapts a list to ARRAY[...] itself; the cast types
+            # an empty list.
+            if self.driver == "data-api":
+                return (
+                    f"CASE WHEN :{param}::jsonb IS NULL THEN NULL ELSE "
+                    f"CAST(ARRAY(SELECT jsonb_array_elements_text(:{param}::jsonb)) AS {element_type}[]) END"
+                )
+            return f"CAST(%({param})s AS {element_type}[])"
         if self.driver == "data-api":
             # JSON-serialized properties (embedded objects/arrays, see
             # SQLInsertSchemaQueryHandler.insert_values) always need a
