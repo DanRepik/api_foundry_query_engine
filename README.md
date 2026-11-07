@@ -932,6 +932,23 @@ Postgres rejects the comparison (`operator does not exist: uuid = text`)
 uncast under the `postgres`/psycopg2 connector, which lets the driver
 infer the type from context.
 
+**Postgres array columns.** A property with `type: array` and an array
+`x-af-column-type` (`text[]`, `integer[]`, `character varying[]`, ...)
+is stored in a native Postgres array column. The Data API has no array
+parameter, so the generated CRUD sends the list as JSON text and unpacks
+it in SQL into an array of the element type; under psycopg2 the list is
+cast to the column type. `null` stays NULL and `[]` is an empty array. The
+value must be a list of scalars (or, as a query parameter, a JSON array);
+anything else is a 400. Reads return the array as a JSON list. Without an
+array `x-af-column-type`, a `type: array` property is written as `jsonb`.
+
+```yaml
+flags:
+  type: array
+  items: { type: string }
+  x-af-column-type: text[]
+```
+
 The `postgres` (psycopg2) connector remains available and is what local
 development and the integration tests use; `postgres-data-api` is
 intended for VPC-egress-constrained Lambda deployments.

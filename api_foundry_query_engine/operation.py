@@ -1,4 +1,5 @@
 import json
+import re
 from typing import Any, Dict, List, Optional
 
 from api_foundry_query_engine.utils.logger import logger
@@ -98,14 +99,18 @@ class Operation:
     def roles(self) -> List[str]:
         """Get the roles from claims.
 
-        Falls back to a singular `role` claim plus `groups` when the
-        plural `roles` key itself isn't present -- some authorizers (e.g.
-        a custom Lambda TOKEN authorizer following AWS's own convention
-        of a `role` string and a `groups` list) never populate `roles`,
+        Falls back to a singular `role` claim plus `groups` and
+        `cognito:groups` when the plural `roles` key itself isn't present
+        -- some authorizers (e.g. a custom Lambda TOKEN authorizer
+        following AWS's own convention of a `role` string and a `groups`
+        list, or API Gateway's Cognito user pool authorizer, which passes
+        the pool's groups as `cognito:groups`) never populate `roles`,
         which previously made every such caller look role-less even with
-        a perfectly valid, correctly-scoped token. `groups` may arrive as
-        a real list or, when it passed through an API Gateway authorizer
-        context (whose values must be strings), a JSON-encoded string.
+        a perfectly valid, correctly-scoped token. Groups may arrive as a
+        real list or, when they passed through an API Gateway authorizer
+        context (whose values must be strings), as a JSON-encoded list, a
+        bracketed list ("[admin member]", "[admin, member]"), a
+        comma-separated string, or one group name.
         """
         if not self.claims:
             return []
@@ -118,20 +123,10 @@ class Operation:
         if role:
             fallback.append(str(role))
 
-        groups_raw = self.claims.get("groups")
-        groups: List[str] = []
-        if isinstance(groups_raw, str) and groups_raw.strip():
-            try:
-                parsed = json.loads(groups_raw)
-                groups = [str(item) for item in parsed] if isinstance(parsed, list) else [groups_raw]
-            except (TypeError, ValueError):
-                groups = [groups_raw]
-        elif isinstance(groups_raw, list):
-            groups = [str(item) for item in groups_raw]
-
-        for group in groups:
-            if group not in fallback:
-                fallback.append(group)
+        for key in ("groups", "cognito:groups"):
+            for group in _parse_groups(self.claims.get(key)):
+                if group not in fallback:
+                    fallback.append(group)
         return fallback
 
     def subject(self) -> Optional[str]:
@@ -141,3 +136,22 @@ class Operation:
     def groups(self) -> List[str]:
         """Get the groups from claims."""
         return self.claims.get("groups", []) if self.claims else []
+
+
+def _parse_groups(raw: Any) -> List[str]:
+    """Group names from a groups claim, in any of the shapes an authorizer
+    passes them (see Operation.roles)."""
+    if isinstance(raw, (list, tuple)):
+        return [str(item) for item in raw if str(item).strip()]
+    if not isinstance(raw, str) or not raw.strip():
+        return []
+    text = raw.strip()
+    try:
+        parsed = json.loads(text)
+        if isinstance(parsed, list):
+            return [str(item) for item in parsed if str(item).strip()]
+    except (TypeError, ValueError):
+        pass
+    if text.startswith("[") and text.endswith("]"):
+        text = text[1:-1]
+    return [part for part in re.split(r"[\s,]+", text) if part]

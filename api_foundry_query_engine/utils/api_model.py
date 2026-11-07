@@ -1,12 +1,30 @@
+import json
 import os
+import re
 import yaml
 
 from datetime import datetime
 from typing import Any, Dict, List, Mapping, Optional
 
+from api_foundry_query_engine.utils.app_exception import ApplicationException
 from api_foundry_query_engine.utils.logger import logger
 
 log = logger(__name__)
+
+# A Postgres array column type: an element type followed by "[]", as in
+# "text[]", "integer[]" or "character varying[]". The element type is
+# interpolated into SQL casts, so only letters, digits, underscores and
+# inner spaces are accepted.
+_ARRAY_COLUMN_TYPE = re.compile(r"^\s*([A-Za-z][A-Za-z0-9_ ]*?)\s*\[\]\s*$")
+
+
+def array_element_type(column_type: Optional[str]) -> Optional[str]:
+    """The element type of an array column type ("text" for "text[]"), or
+    None when the column is not an array."""
+    if not isinstance(column_type, str):
+        return None
+    match = _ARRAY_COLUMN_TYPE.match(column_type)
+    return " ".join(match.group(1).lower().split()) if match else None
 
 api_model = None
 
@@ -49,9 +67,18 @@ class SchemaObjectProperty:
     def __repr__(self):
         return f"SchemaObjectProperty(api_name={self.api_name}, column_name={self.column_name}, type={self.type})"
 
+    @property
+    def array_element_type(self) -> Optional[str]:
+        """The element type when the column is a Postgres array
+        (x-af-column-type "text[]" and the like), else None."""
+        return array_element_type(self.column_type)
+
     def convert_to_db_value(self, value) -> Optional[Any]:
         if value is None:
             return None
+
+        if self.array_element_type:
+            return self._convert_array(value)
 
         column_type = self.column_type if self.column_type is not None else "string"
 
@@ -104,6 +131,23 @@ class SchemaObjectProperty:
         # Default to string conversion for unknown types
         else:
             return value
+
+    def _convert_array(self, value) -> list:
+        """An array column's value: a list of scalars. A string (a query
+        parameter) must hold a JSON array."""
+        if isinstance(value, str):
+            try:
+                value = json.loads(value)
+            except ValueError:
+                value = None
+        if not isinstance(value, (list, tuple)) or any(
+            isinstance(item, (list, tuple, dict)) for item in value
+        ):
+            raise ApplicationException(
+                400,
+                f"Property '{self.api_name}' is a {self.column_type} column and takes an array of scalar values",
+            )
+        return list(value)
 
     def is_soft_delete_field(self) -> bool:
         """Check if this property is configured for soft delete."""

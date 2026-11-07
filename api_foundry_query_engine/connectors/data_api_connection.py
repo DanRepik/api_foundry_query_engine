@@ -66,9 +66,11 @@ def _encode_parameter(value: Any) -> dict:
     if isinstance(value, time_type):
         return {"stringValue": value.strftime("%H:%M:%S.%f")}
     if isinstance(value, (dict, list)):
-        # Not expected on this path today (object/array properties are
-        # already JSON-text by the time they reach here), but dumping to
-        # JSON is the only non-lossy fallback if one ever does.
+        # Postgres array columns (x-af-column-type "text[]" and the like)
+        # arrive as lists: the Data API has no array parameter, so they
+        # travel as JSON text and SQLQueryHandler.placeholder unpacks them.
+        # Embedded objects are already JSON text by now; dumping is also the
+        # only non-lossy fallback for anything else.
         return {"stringValue": json.dumps(value)}
     return {"stringValue": str(value)}
 
