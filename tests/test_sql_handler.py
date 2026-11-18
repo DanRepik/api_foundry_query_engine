@@ -1480,3 +1480,34 @@ class TestTypeConversions:
         result = prop.convert_to_api_value(123)
         assert result == "123"  # String conversion due to api_type
         assert isinstance(result, str)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "cap, requested, expected",
+    [
+        (None, None, ""),          # a config without a row limit: as before
+        (None, "50", " LIMIT 50"),
+        (100, None, " LIMIT 100"),  # the row limit applies when __limit is left out
+        (100, "50", " LIMIT 50"),
+        (100, "500", " LIMIT 100"),  # and caps a larger __limit
+        (100, 500, " LIMIT 100"),
+    ],
+)
+def test_row_limit_caps_limit(cap, requested, expected):
+    schema_object = invoice_with_datetime_version_stamp()
+    schema_object.limit = cap
+    params = {} if requested is None else {"limit": requested}
+    handler = SQLSelectSchemaQueryHandler(
+        Operation(entity="invoice", action="read", metadata_params=params),
+        schema_object,
+        "postgres",
+    )
+    assert handler.limit_expression == expected
+    assert handler.sql.endswith(expected)
+
+
+@pytest.mark.unit
+def test_row_limit_is_read_from_the_config():
+    assert SchemaObject({"api_name": "x", "limit": 25}).limit == 25
+    assert SchemaObject({"api_name": "x"}).limit is None
