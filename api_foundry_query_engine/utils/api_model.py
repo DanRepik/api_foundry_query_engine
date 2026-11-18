@@ -186,17 +186,18 @@ class SchemaObjectProperty:
         elif api_type in ["number", "float"]:
             return float(value) if value is not None else None
 
-        # Handle boolean type - convert any value to string representation
+        # Handle boolean type: a JSON true or false. Never a string --
+        # "False" is truthy to every JSON client.
         elif api_type == "boolean":
             if isinstance(value, bool):
-                return str(value)
+                return value
             elif isinstance(value, int):
                 # Handle boolean stored as integer (0/1)
-                return "true" if value != 0 else "false"
+                return value != 0
             elif isinstance(value, str):
-                return value.lower() in ["true", "1", "yes", "on"]
+                return value.lower() in ["true", "t", "1", "yes", "on"]
             else:
-                return str(bool(value))
+                return bool(value)
 
         # Handle date type
         elif api_type == "date":
