@@ -311,6 +311,9 @@ class SchemaObject:
         )
         self._primary_key: str = str(data.get("primary_key"))
         self.permissions = data.get("permissions")
+        # Most rows one read returns (api_foundry's x-af-limit). None in a
+        # config from an api_foundry before 0.8.13: no cap.
+        self.limit: Optional[int] = data.get("limit")
 
     def __repr__(self):
         return f"SchemaObject(table_name={self.table_name}, primary_key={self.primary_key})"

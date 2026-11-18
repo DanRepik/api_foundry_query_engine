@@ -584,6 +584,8 @@ GET /album?__limit=20&__offset=40
 
 Returns albums 41-60.
 
+A read never returns more rows than the schema object's row limit (`limit` in the config, from api_foundry's `x-af-limit`, 1,000 by default). It also applies when `__limit` is left out, and a larger `__limit` is cut down to it. A config written by an api_foundry before 0.8.13 has no row limit, and reads are uncapped as before.
+
 #### `__count` - Count Only
 
 ```
@@ -868,7 +870,6 @@ export REQUIRE_AUTHENTICATION="true"  # Optional: default true
 ```bash
 export LOG_LEVEL="INFO"              # DEBUG, INFO, WARN, ERROR
 export ENABLE_CORS="true"            # Enable CORS headers
-export DEFAULT_PAGE_SIZE="50"        # Default __limit value
 ```
 
 ### Database Secrets Format

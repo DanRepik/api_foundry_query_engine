@@ -417,16 +417,20 @@ class SQLSelectSchemaQueryHandler(SQLSchemaQueryHandler):
 
     @property
     def limit_expression(self) -> str:
+        """__limit, capped at the schema object's row limit, which also
+        applies when __limit is left out."""
+        cap = getattr(self.schema_object, "limit", None)
         limit_str = self.operation.metadata_params.get("limit", None)
         if not limit_str:
-            return ""
+            return f" LIMIT {int(cap)}" if cap else ""
 
         if isinstance(limit_str, str) and not limit_str.isdigit():
             raise ApplicationException(
                 400, f"Limit is not an valid integer {limit_str}"
             )
 
-        return f" LIMIT {limit_str}"
+        limit = int(limit_str)
+        return f" LIMIT {min(limit, int(cap)) if cap else limit}"
 
     @property
     def offset_expression(self) -> str:
