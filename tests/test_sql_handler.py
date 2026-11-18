@@ -1195,14 +1195,13 @@ class TestTypeConversions:
             }
         )
 
-        # Boolean values should be converted to string representation
-        result = bool_property.convert_to_api_value(True)
-        assert result == "True"
-        assert isinstance(result, str)
-
-        result = bool_property.convert_to_api_value(False)
-        assert result == "False"
-        assert isinstance(result, str)
+        # Booleans stay booleans: a string "False" is truthy to JSON clients
+        assert bool_property.convert_to_api_value(True) is True
+        assert bool_property.convert_to_api_value(False) is False
+        # A driver that returns text (Postgres "t"/"f", or "true"/"false")
+        assert bool_property.convert_to_api_value("f") is False
+        assert bool_property.convert_to_api_value("t") is True
+        assert bool_property.convert_to_api_value("false") is False
 
     def test_convert_to_api_value_boolean_from_integer(self):
         """Test boolean API type handling integer database values."""
@@ -1215,22 +1214,13 @@ class TestTypeConversions:
             }
         )
 
-        # Integer 1 should convert to "true"
-        result = bool_property.convert_to_api_value(1)
-        assert result == "true"
-        assert isinstance(result, str)
+        # Integer 1 is true, 0 is false
+        assert bool_property.convert_to_api_value(1) is True
+        assert bool_property.convert_to_api_value(0) is False
 
-        # Integer 0 should convert to "false"
-        result = bool_property.convert_to_api_value(0)
-        assert result == "false"
-        assert isinstance(result, str)
-
-        # Any non-zero integer should convert to "true"
-        result = bool_property.convert_to_api_value(42)
-        assert result == "true"
-
-        result = bool_property.convert_to_api_value(-1)
-        assert result == "true"
+        # Any non-zero integer is true
+        assert bool_property.convert_to_api_value(42) is True
+        assert bool_property.convert_to_api_value(-1) is True
 
     def test_convert_to_api_value_uuid_types(self):
         """Test UUID type conversions from database to API."""
@@ -1380,14 +1370,14 @@ class TestTypeConversions:
                 "column_type": "boolean",
                 "test_value": "true",
                 "expected_db": True,
-                "expected_api": "True",
+                "expected_api": True,
             },
             {
                 "api_type": "boolean",
                 "column_type": "integer",
                 "test_value": "true",
                 "expected_db": 1,
-                "expected_api": "true",
+                "expected_api": True,
             },
             {
                 "api_type": "date",
